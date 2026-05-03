@@ -1,0 +1,98 @@
+---
+name: MusicMate
+options:
+  bundleIdPrefix: com.nopxx
+  deploymentTarget:
+    macOS: '14.0'
+  developmentLanguage: en
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: '5.9'
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: '1'
+    DEVELOPMENT_TEAM: H4M5HWBU2K
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: true
+    SWIFT_STRICT_CONCURRENCY: minimal
+targets:
+  MusicMate:
+    type: application
+    platform: macOS
+    sources:
+    - path: MusicMate/Sources
+    info:
+      path: MusicMate/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleDisplayName: MusicMate
+        NSAppleEventsUsageDescription: MusicMate ต้องการสิทธิ์ควบคุม Music เพื่ออ่านสถานะการเล่นและสั่งเล่น/หยุด
+        NSAppleMusicUsageDescription: MusicMate อ่านข้อมูลเพลงที่กำลังเล่นจาก Apple
+          Music
+        NSUserNotificationAlertStyle: alert
+    entitlements:
+      path: MusicMate/MusicMate.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.automation.apple-events: true
+        com.apple.security.network.client: true
+        com.apple.security.cs.disable-library-validation: true
+        com.apple.security.application-groups:
+        - group.com.nopxx.MusicMate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.MusicMate
+        GENERATE_INFOPLIST_FILE: false
+        ENABLE_APP_SANDBOX: false
+        SWIFT_OBJC_BRIDGING_HEADER: MusicMate/MusicMate-Bridging-Header.h
+        CLANG_ENABLE_MODULES: 'YES'
+    dependencies:
+    - target: MusicMateWidget
+    - sdk: ScriptingBridge.framework
+  MusicMateWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+    - path: MusicMateWidget
+    info:
+      path: MusicMateWidget/Info.plist
+      properties:
+        CFBundleDisplayName: MusicMate Widget
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: MusicMateWidget/MusicMateWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+        - group.com.nopxx.MusicMate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.MusicMate.Widget
+        GENERATE_INFOPLIST_FILE: false
+        SKIP_INSTALL: true
+  MusicMateTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+    - path: MusicMateTests
+    dependencies:
+    - target: MusicMate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.MusicMate.Tests
+        GENERATE_INFOPLIST_FILE: true
+schemes:
+  MusicMate:
+    build:
+      targets:
+        MusicMate: all
+        MusicMateWidget: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+      - MusicMateTests
+    archive:
+      config: Release

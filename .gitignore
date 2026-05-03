@@ -1,0 +1,32 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.dSYM/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Built artifacts
+*.app
+*.ipa
+
+# User-specific
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# Logs
+*.log
+
+# Scratch / experiments
+scratch_*.swift
