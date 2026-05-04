@@ -50,13 +50,14 @@ final class WebhookDispatcher: ObservableObject {
         guard enabled() else { return }
         guard let snap, snap.hasTrack else {
             if !lastTrackKey.isEmpty {
-                if lastIsPlaying { fire(event: "paused", snap: phantomSnap()) }
+                if lastIsPlaying { fire(event: "paused", rawSnap: phantomSnap(), editedSnap: nil) }
                 lastTrackKey = ""
                 lastIsPlaying = false
             }
             return
         }
-        let key = trackKey(snap)
+        let edited = EditHistoryService.shared.apply(snap)
+        let key = trackKey(edited)
         let event: String
         if key != lastTrackKey {
             event = snap.isPlaying ? "nowplaying" : "paused"
@@ -67,16 +68,17 @@ final class WebhookDispatcher: ObservableObject {
         }
         lastTrackKey = key
         lastIsPlaying = snap.isPlaying
-        fire(event: event, snap: snap)
+        fire(event: event, rawSnap: snap, editedSnap: edited)
     }
 
     private func handleScrobbleSuccess() {
         guard enabled() else { return }
         guard let snap = monitor?.snapshot, snap.hasTrack else { return }
-        let key = trackKey(snap)
+        let edited = EditHistoryService.shared.apply(snap)
+        let key = trackKey(edited)
         guard key != lastFiredScrobbleKey else { return }
         lastFiredScrobbleKey = key
-        fire(event: "scrobble", snap: snap)
+        fire(event: "scrobble", rawSnap: snap, editedSnap: edited)
     }
 
     private func startHeartbeat() {
@@ -94,17 +96,22 @@ final class WebhookDispatcher: ObservableObject {
         guard enabled() else { return }
         guard let snap = monitor?.snapshot, snap.hasTrack else { return }
         let event = snap.isPlaying ? "nowplaying" : "paused"
-        fire(event: event, snap: snap)
+        let edited = EditHistoryService.shared.apply(snap)
+        fire(event: event, rawSnap: snap, editedSnap: edited)
     }
 
-    private func fire(event: String, snap: NowPlayingSnapshot) {
+    private func fire(event: String, rawSnap: NowPlayingSnapshot, editedSnap: NowPlayingSnapshot?) {
         let urls = urls()
         guard !urls.isEmpty else { return }
-        let payload = buildPayload(event: event, snap: snap)
-        guard let body = try? JSONSerialization.data(withJSONObject: payload, options: []) else { return }
-        for str in urls {
-            guard let url = URL(string: str) else { continue }
-            Task { await post(url: url, body: body) }
+        Task {
+            let result = await ArtworkService.shared.lookup(
+                title: rawSnap.title, artist: rawSnap.artist, album: rawSnap.album)
+            let payload = buildPayload(event: event, rawSnap: rawSnap, editedSnap: editedSnap, artwork: result)
+            guard let body = try? JSONSerialization.data(withJSONObject: payload, options: []) else { return }
+            for str in urls {
+                guard let url = URL(string: str) else { continue }
+                await post(url: url, body: body)
+            }
         }
     }
 
@@ -120,20 +127,20 @@ final class WebhookDispatcher: ObservableObject {
         }
     }
 
-    private func buildPayload(event: String, snap: NowPlayingSnapshot) -> [String: Any] {
+    private func buildPayload(event: String, rawSnap: NowPlayingSnapshot, editedSnap: NowPlayingSnapshot?, artwork: ArtworkResult) -> [String: Any] {
         let isPlaying = (event != "paused")
-        let duration = Int(snap.duration)
-        let position = Int(snap.position)
+        let duration = Int(rawSnap.duration)
+        let position = Int(rawSnap.position)
         let song: [String: Any] = [
             "processed": [
-                "artist": snap.artist,
-                "track": snap.title,
-                "album": snap.album,
+                "artist": editedSnap?.artist ?? rawSnap.artist,
+                "track": editedSnap?.title ?? rawSnap.title,
+                "album": editedSnap?.album ?? rawSnap.album,
                 "duration": duration,
             ],
             "parsed": [
-                "artist": snap.artist,
-                "track": snap.title,
+                "artist": rawSnap.artist,
+                "track": rawSnap.title,
                 "duration": duration,
                 "currentTime": position,
                 "isPlaying": isPlaying,
@@ -141,9 +148,9 @@ final class WebhookDispatcher: ObservableObject {
             "flags": ["isValid": true],
             "metadata": [
                 "label": "MusicMate",
-                "trackArtUrl": "",
-                "animationUrl": "",
-                "masterTallUrl": "",
+                "trackArtUrl": artwork.artworkUltraURL ?? artwork.artworkURL ?? "",
+                "animationUrl": artwork.animationURL ?? "",
+                "masterTallUrl": artwork.animationTallURL ?? "",
                 "trackUrl": "",
                 "albumUrl": "",
                 "artistUrl": "",
