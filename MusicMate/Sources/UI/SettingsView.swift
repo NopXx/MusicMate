@@ -35,6 +35,14 @@ final class SettingsViewModel: ObservableObject {
     @Published var webhookUrls: [String]
     @Published var newWebhookUrl: String = ""
 
+    @Published var lockscreenEnabled: Bool
+    @Published var lockscreenShowAlbum: Bool
+    @Published var lockscreenShowProgress: Bool
+    @Published var lockscreenAnimatedArtwork: Bool
+    @Published var lockscreenBackgroundBlur: Double
+    @Published var lockscreenPadding: Int
+    @Published var lockscreenScreens: String
+
     private let store = SettingsStore.shared
     private var pollTask: Task<Void, Never>?
 
@@ -74,6 +82,17 @@ final class SettingsViewModel: ObservableObject {
         self.webhookHeartbeat = store.int(["webhook", "heartbeat_seconds"])
         self.webhookUrls = (store.value(["webhook", "urls"], [Any].self) ?? [])
             .compactMap { $0 as? String }
+
+        self.lockscreenEnabled = store.bool(["lockscreen", "enabled"])
+        self.lockscreenShowAlbum = store.bool(["lockscreen", "show_album"])
+        self.lockscreenShowProgress = store.bool(["lockscreen", "show_progress"])
+        self.lockscreenAnimatedArtwork = store.bool(["lockscreen", "animated_artwork"])
+        let blur = store.int(["lockscreen", "background_blur"])
+        self.lockscreenBackgroundBlur = Double(blur > 0 ? blur : 60)
+        let pad = store.int(["lockscreen", "padding"])
+        self.lockscreenPadding = pad > 0 ? pad : 32
+        let scr = store.string(["lockscreen", "screens"])
+        self.lockscreenScreens = scr.isEmpty ? "main" : scr
     }
 
     var hasSession: Bool {
@@ -232,12 +251,24 @@ final class SettingsViewModel: ObservableObject {
             "artwork_style": miniplayerArtworkStyle,
         ]])
     }
+
+    func saveLockscreen() {
+        store.merge(["lockscreen": [
+            "enabled": lockscreenEnabled,
+            "show_album": lockscreenShowAlbum,
+            "show_progress": lockscreenShowProgress,
+            "animated_artwork": lockscreenAnimatedArtwork,
+            "background_blur": Int(lockscreenBackgroundBlur),
+            "padding": lockscreenPadding,
+            "screens": lockscreenScreens,
+        ]])
+    }
 }
 
 // MARK: - Settings tab enum
 
 private enum SettingsTab: String, CaseIterable, Identifiable {
-    case lastfm, scrobble, nowPlaying, notifications, webhooks, menubar, miniplayer, editRules, history
+    case lastfm, scrobble, nowPlaying, notifications, webhooks, menubar, miniplayer, lockscreen, editRules, history
 
     var id: String { rawValue }
 
@@ -250,6 +281,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .webhooks: return "Webhooks"
         case .menubar: return "Menu Bar"
         case .miniplayer: return "Mini Player"
+        case .lockscreen: return "Lock Screen"
         case .editRules: return "Edit Rules"
         case .history: return "ประวัติ"
         }
@@ -264,6 +296,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .webhooks: return "link"
         case .menubar: return "menubar.rectangle"
         case .miniplayer: return "play.rectangle"
+        case .lockscreen: return "lock.display"
         case .editRules: return "pencil.and.list.clipboard"
         case .history: return "clock.arrow.circlepath"
         }
@@ -292,6 +325,7 @@ struct SettingsView: View {
                 case .webhooks:      WebhooksTab(vm: vm)
                 case .menubar:       MenubarTab(vm: vm)
                 case .miniplayer:    MiniplayerTab(vm: vm)
+                case .lockscreen:    LockscreenTab(vm: vm)
                 case .editRules:     EditRulesTab()
                 case .history:       HistoryTab()
                 }
@@ -589,6 +623,97 @@ private struct MiniplayerTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+// MARK: - Lock Screen
+
+private struct LockscreenTab: View {
+    @ObservedObject var vm: SettingsViewModel
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("เปิดใช้งาน Lock Screen Player", isOn: $vm.lockscreenEnabled)
+                    .onChange(of: vm.lockscreenEnabled) { _, _ in vm.saveLockscreen() }
+
+                Text("แสดง now-playing เต็มจอเมื่อล็อกหน้าจอ macOS — ใช้เทคนิค shielding window จึงต้องการสิทธิ์เข้าถึงจอภาพระบบ")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                SectionHeader(icon: "lock.display",
+                              title: "Lock Screen",
+                              subtitle: "แสดงเพลงที่กำลังเล่นบนหน้าล็อก")
+            }
+
+            Section("การแสดงผล") {
+                Toggle("แสดงชื่ออัลบั้ม", isOn: $vm.lockscreenShowAlbum)
+                    .onChange(of: vm.lockscreenShowAlbum) { _, _ in vm.saveLockscreen() }
+                Toggle("แสดงแถบความคืบหน้า", isOn: $vm.lockscreenShowProgress)
+                    .onChange(of: vm.lockscreenShowProgress) { _, _ in vm.saveLockscreen() }
+                Toggle("ใช้ animated artwork (ถ้ามี)", isOn: $vm.lockscreenAnimatedArtwork)
+                    .onChange(of: vm.lockscreenAnimatedArtwork) { _, _ in vm.saveLockscreen() }
+            }
+
+            Section("รูปลักษณ์") {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("ความเบลอพื้นหลัง")
+                        Spacer()
+                        Text("\(Int(vm.lockscreenBackgroundBlur))")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $vm.lockscreenBackgroundBlur, in: 0...100, step: 5)
+                        .onChange(of: vm.lockscreenBackgroundBlur) { _, _ in vm.saveLockscreen() }
+                }
+
+                Stepper(value: $vm.lockscreenPadding, in: 0...120, step: 8) {
+                    HStack {
+                        Text("Padding")
+                        Spacer()
+                        Text("\(vm.lockscreenPadding) pt").foregroundStyle(.secondary).monospacedDigit()
+                    }
+                }
+                .onChange(of: vm.lockscreenPadding) { _, _ in vm.saveLockscreen() }
+
+                Picker("จอที่แสดง", selection: $vm.lockscreenScreens) {
+                    Text("จอหลักเท่านั้น").tag("main")
+                    Text("ทุกจอ").tag("all")
+                }
+                .onChange(of: vm.lockscreenScreens) { _, _ in vm.saveLockscreen() }
+            }
+
+            Section("ทดสอบ") {
+                if let controller = LockScreenController.shared {
+                    LockscreenTestRow(controller: controller)
+                } else {
+                    Text("Controller ยังไม่พร้อม — รอแอพเริ่มทำงานก่อน")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct LockscreenTestRow: View {
+    @ObservedObject var controller: LockScreenController
+
+    var body: some View {
+        Button {
+            controller.toggleTestPresentation()
+        } label: {
+            if controller.isShowingTestPresentation {
+                Label("ซ่อน window ทดสอบ", systemImage: "eye.slash")
+            } else {
+                Label("แสดงตอนนี้ (โดยไม่ต้อง lock)", systemImage: "eye")
+            }
+        }
+        Text("ใช้ทดสอบว่าหน้าตา window แสดงผลถูกต้องไหม — สำหรับ debug เท่านั้น")
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 }
 

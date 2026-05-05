@@ -62,6 +62,15 @@ final class SettingsStore: ObservableObject {
             "widget": [
                 "large_artwork_style": "normal",
             ],
+            "lockscreen": [
+                "enabled": false,
+                "show_album": true,
+                "show_progress": true,
+                "animated_artwork": true,
+                "background_blur": 60,
+                "padding": 32,
+                "screens": "main",
+            ],
         ]
     }
 
