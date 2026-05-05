@@ -66,6 +66,8 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
         - group.com.nopxx.MusicMate
+        com.apple.security.network.client: true
+        com.apple.security.files.downloaded.read-only: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.MusicMate.Widget

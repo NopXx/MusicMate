@@ -23,6 +23,13 @@ struct AnimatedArtworkView: NSViewRepresentable {
         view.load(url: url)
     }
 
+    static func dismantleNSView(_ view: PlayerView, coordinator: Coordinator) {
+        view.cleanup()
+        coordinator.looper = nil
+        coordinator.queuePlayer?.pause()
+        coordinator.queuePlayer = nil
+    }
+
     final class Coordinator {
         var queuePlayer: AVQueuePlayer?
         var looper: AVPlayerLooper?
@@ -57,11 +64,7 @@ struct AnimatedArtworkView: NSViewRepresentable {
         func load(url: URL?) {
             guard url != lastURL else { return }
             lastURL = url
-            playerLayer?.removeFromSuperlayer()
-            playerLayer = nil
-            coordinator?.looper = nil
-            coordinator?.queuePlayer?.pause()
-            coordinator?.queuePlayer = nil
+            cleanup()
             guard let url else { return }
 
             let item = AVPlayerItem(url: url)
@@ -79,6 +82,14 @@ struct AnimatedArtworkView: NSViewRepresentable {
             layer?.addSublayer(pl)
             playerLayer = pl
             queue.play()
+        }
+
+        func cleanup() {
+            playerLayer?.removeFromSuperlayer()
+            playerLayer = nil
+            coordinator?.looper = nil
+            coordinator?.queuePlayer?.pause()
+            coordinator?.queuePlayer = nil
         }
     }
 }

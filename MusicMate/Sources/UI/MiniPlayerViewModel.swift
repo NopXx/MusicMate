@@ -53,6 +53,11 @@ final class MiniPlayerViewModel: ObservableObject {
                 let edited = rawSnap.map { EditHistoryService.shared.apply($0) }
                 self.snapshot = edited
                 self.handleTrackUpdate(edited)
+                WidgetDataManager.shared.update(
+                    snapshot: edited,
+                    artwork: edited != nil ? self.artwork : nil,
+                    palette: edited != nil ? self.palette : nil
+                )
             }
             .store(in: &cancellables)
 
@@ -73,16 +78,20 @@ final class MiniPlayerViewModel: ObservableObject {
             palette = .default
             lastArtworkKey = ""
             lastPaletteURL = ""
+            WidgetDataManager.shared.update(snapshot: nil, artwork: nil, palette: nil)
             return
         }
         let key = snap.persistentID.isEmpty
             ? "\(snap.title)|\(snap.artist)|\(snap.album)".lowercased()
             : snap.persistentID
-        guard key != lastArtworkKey else { return }
+        guard key != lastArtworkKey else {
+            WidgetDataManager.shared.update(snapshot: snap, artwork: artwork, palette: palette)
+            return
+        }
         lastArtworkKey = key
-        artwork = ArtworkResult()
-        palette = .default
-        lastPaletteURL = ""
+        // Do not clear artwork and palette here so the UI smoothly holds the
+        // previous artwork until the new one is fetched, avoiding rapid
+        // SwiftUI transitions that break NSViewRepresentables.
 
         let title = snap.title, artist = snap.artist, album = snap.album
         Task { [weak self] in
@@ -91,6 +100,11 @@ final class MiniPlayerViewModel: ObservableObject {
                 guard let self else { return }
                 guard self.lastArtworkKey == key else { return }
                 self.artwork = result
+                WidgetDataManager.shared.update(
+                    snapshot: self.snapshot,
+                    artwork: result,
+                    palette: self.palette
+                )
                 if let url = result.artworkURL, !url.isEmpty, url != self.lastPaletteURL {
                     self.lastPaletteURL = url
                     Task { [weak self] in
@@ -98,6 +112,11 @@ final class MiniPlayerViewModel: ObservableObject {
                         await MainActor.run {
                             guard let self, self.lastPaletteURL == url else { return }
                             self.palette = palette
+                            WidgetDataManager.shared.update(
+                                snapshot: self.snapshot,
+                                artwork: self.artwork,
+                                palette: palette
+                            )
                         }
                     }
                 }

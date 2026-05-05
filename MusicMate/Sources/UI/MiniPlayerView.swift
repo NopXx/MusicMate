@@ -532,8 +532,7 @@ struct MiniPlayerView: View {
 
     private func remainingString() -> String {
         let dur = viewModel.snapshot?.duration ?? 0
-        let pos = viewModel.snapshot?.position ?? 0
-        return dur > 0 ? "-\(timeString(dur - pos))" : "-0:00"
+        return dur > 0 ? timeString(dur) : "0:00"
     }
 
     private func timeString(_ seconds: Double) -> String {
