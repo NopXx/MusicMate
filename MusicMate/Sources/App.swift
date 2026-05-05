@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static var shared: AppDelegate?
 
     private(set) var menuBarController: MenuBarController?
+    private(set) var lockScreenController: LockScreenController?
     let playerMonitor = PlayerMonitor()
     let scrobbler = ScrobblerService()
     let nowPlaying = NowPlayingService()
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HistoryRecorder.shared.attach(monitor: playerMonitor, scrobbler: scrobbler)
         PendingScrobbleQueue.shared.start()
         menuBarController = MenuBarController(playerMonitor: playerMonitor, scrobbler: scrobbler)
+        lockScreenController = LockScreenController(playerMonitor: playerMonitor)
         playerMonitor.start()
 
         DistributedNotificationCenter.default().addObserver(
