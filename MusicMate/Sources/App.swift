@@ -31,6 +31,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PendingScrobbleQueue.shared.start()
         menuBarController = MenuBarController(playerMonitor: playerMonitor, scrobbler: scrobbler)
         playerMonitor.start()
+
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(handleWidgetCommand(_:)),
+            name: NSNotification.Name("com.nopxx.MusicMate.WidgetCommand"),
+            object: nil
+        )
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+        handleURL(url)
+    }
+
+    private func handleURL(_ url: URL) {
+        guard url.scheme == "musicmate" else { return }
+        guard let host = url.host else { return }
+        executeCommand(host)
+    }
+
+    @objc private func handleWidgetCommand(_ notification: Notification) {
+        guard let command = notification.object as? String else { return }
+        executeCommand(command)
+    }
+
+    private func executeCommand(_ command: String) {
+        switch command {
+        case "play":       MusicAppController.play()
+        case "pause":      MusicAppController.pause()
+        case "playpause":  MusicAppController.playPause()
+        case "next":       MusicAppController.next()
+        case "previous":   MusicAppController.previous()
+        default: break
+        }
+        playerMonitor.refresh()
     }
 
     func openSettings() { settingsWindow.show() }

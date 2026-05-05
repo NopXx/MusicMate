@@ -59,6 +59,9 @@ final class SettingsStore: ObservableObject {
                 "animation_quality": "high",
                 "artwork_style": "classic",
             ],
+            "widget": [
+                "large_artwork_style": "normal",
+            ],
         ]
     }
 

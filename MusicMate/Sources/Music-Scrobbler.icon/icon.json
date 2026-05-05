@@ -1,0 +1,139 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.29086,0.60516,0.96324,1.00000",
+      "display-p3:0.27599,0.41124,0.57047,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "display-p3:0.65725,0.78061,0.83744,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.65725,0.78061,0.83744,1.00000"
+              }
+            }
+          ],
+          "image-name" : "music-1005-svgrepo-com.svg",
+          "name" : "music-1005-svgrepo-com",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 0.8,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "fill" : {
+            "solid" : "display-p3:0.62808,0.70141,0.81438,1.00000"
+          },
+          "image-name" : "music-equalizer-solid.svg",
+          "name" : "music-equalizer-solid",
+          "position" : {
+            "scale" : 0.65,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "fill" : {
+            "solid" : "display-p3:0.62287,0.69158,0.80685,1.00000"
+          },
+          "image-name" : "music-equalizer-solid.svg",
+          "name" : "music-equalizer-solid",
+          "position" : {
+            "scale" : 0.65,
+            "translation-in-points" : [
+              283.7577157378155,
+              5.684341886080802e-14
+            ]
+          }
+        },
+        {
+          "fill" : {
+            "solid" : "display-p3:0.60875,0.66070,0.77559,1.00000"
+          },
+          "image-name" : "music-equalizer-solid.svg",
+          "name" : "music-equalizer-solid",
+          "position" : {
+            "scale" : 0.65,
+            "translation-in-points" : [
+              -284.8526744332131,
+              -1.1368683772161603e-13
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "srgb:0.75407,0.75409,0.75408,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:0.92143,0.92145,0.92144,1.00000"
+              }
+            }
+          ],
+          "hidden" : true,
+          "image-name" : "music-bars-svgrepo-com.svg",
+          "name" : "music-bars-svgrepo-com",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "fill" : {
+            "solid" : "srgb:0.57415,0.57416,0.57415,1.00000"
+          },
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "music-party-svgrepo-com.svg",
+          "name" : "music-party-svgrepo-com"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

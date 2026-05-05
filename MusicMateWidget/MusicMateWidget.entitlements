@@ -8,5 +8,9 @@
 	<array>
 		<string>group.com.nopxx.MusicMate</string>
 	</array>
+	<key>com.apple.security.files.downloaded.read-only</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
 </dict>
 </plist>
