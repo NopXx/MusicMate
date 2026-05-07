@@ -3,6 +3,7 @@ import AppKit
 
 struct LockScreenPlayerView: View {
     @ObservedObject var viewModel: LockScreenViewModel
+    @State private var isLargeArtwork: Bool = false
 
     var body: some View {
         GeometryReader { geo in
@@ -16,37 +17,50 @@ struct LockScreenPlayerView: View {
             let staticURL = artworkURLString.flatMap(URL.init(string:))
             let animURL = animationURLString.flatMap(URL.init(string:))
 
-            // Layout — iOS-style centered:
-            //   60% of vertical space → artwork (square, capped by width)
-            //   gap
-            //   ~30% of vertical space → frosted glass card
-            let artworkSize = min(geo.size.height * 0.55, geo.size.width * 0.6)
-            let cardWidth = min(640, geo.size.width * 0.55)
+            let largeSize = min(geo.size.height * 0.50, geo.size.width * 0.55)
+            let cardWidth = min(680, geo.size.width * 0.55)
 
             ZStack {
                 BackgroundLayer(
                     palette: viewModel.palette,
-                    artworkURL: staticURL,
-                    blurAmount: CGFloat(viewModel.backgroundBlur)
+                    artworkURL: staticURL
                 )
 
                 if let snap, snap.hasTrack {
-                    VStack(spacing: 36) {
-                        ArtworkLayer(
-                            staticURL: staticURL,
-                            animatedURL: animURL,
-                            size: artworkSize
-                        )
+                    VStack(spacing: 28) {
+                        if isLargeArtwork {
+                            ArtworkLayer(
+                                staticURL: staticURL,
+                                animatedURL: animURL,
+                                size: largeSize
+                            )
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                                    isLargeArtwork = false
+                                }
+                            }
+                            .transition(.scale(scale: 0.92).combined(with: .opacity))
+                        }
 
                         NowPlayingCard(
                             snap: snap,
                             showAlbum: viewModel.showAlbum,
                             showProgress: viewModel.showProgress,
-                            width: cardWidth
+                            width: cardWidth,
+                            staticURL: staticURL,
+                            animatedURL: animURL,
+                            animatedArtwork: viewModel.animatedArtwork,
+                            showInlineArtwork: !isLargeArtwork,
+                            onArtworkTap: {
+                                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                                    isLargeArtwork = true
+                                }
+                            }
                         )
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .padding(CGFloat(viewModel.padding))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, CGFloat(viewModel.padding) + 40)
+                    .padding(.horizontal, CGFloat(viewModel.padding))
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -58,7 +72,6 @@ struct LockScreenPlayerView: View {
 private struct BackgroundLayer: View {
     let palette: ArtworkPalette
     let artworkURL: URL?
-    let blurAmount: CGFloat
 
     var body: some View {
         ZStack {
@@ -72,23 +85,40 @@ private struct BackgroundLayer: View {
                 endPoint: .bottomTrailing
             )
 
-            if let url = artworkURL, blurAmount > 0 {
+            if let url = artworkURL {
                 AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .blur(radius: max(0, min(80, blurAmount)))
-                            .opacity(0.55)
-                    default:
+                    if let img = phase.image {
+                        img.resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .blur(radius: 60)
+                            .saturation(2.4)
+                            .brightness(-0.15)
+                            .opacity(0.78)
+                    } else {
                         Color.clear
                     }
                 }
+                .clipped()
             }
 
-            Color.black.opacity(0.30)
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.45)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
+        .mask(
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.0),
+                    .init(color: .clear, location: 0.18),
+                    .init(color: .black, location: 0.32),
+                    .init(color: .black, location: 1.0),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
 }
 
@@ -127,29 +157,45 @@ private struct NowPlayingCard: View {
     let showAlbum: Bool
     let showProgress: Bool
     let width: CGFloat
+    let staticURL: URL?
+    let animatedURL: URL?
+    let animatedArtwork: Bool
+    let showInlineArtwork: Bool
+    let onArtworkTap: () -> Void
 
     var body: some View {
         VStack(spacing: 18) {
-            VStack(spacing: 4) {
-                Text(snap.title)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+            HStack(spacing: 16) {
+                if showInlineArtwork {
+                    artworkThumbnail
+                        .onTapGesture { onArtworkTap() }
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
 
-                Text(snap.artist)
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.65))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-
-                if showAlbum && !snap.album.isEmpty {
-                    Text(snap.album)
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white.opacity(0.45))
+                VStack(alignment: showInlineArtwork ? .leading : .center, spacing: 4) {
+                    Text(snap.title)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .padding(.top, 1)
+                        .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .center)
+
+                    Text(snap.artist)
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .center)
+
+                    if showAlbum && !snap.album.isEmpty {
+                        Text(snap.album)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.top, 1)
+                            .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .center)
+                    }
                 }
             }
 
@@ -180,6 +226,32 @@ private struct NowPlayingCard: View {
                 )
         )
         .shadow(color: .black.opacity(0.4), radius: 30, x: 0, y: 18)
+    }
+
+    @ViewBuilder
+    private var artworkThumbnail: some View {
+        ZStack {
+            if let staticURL {
+                AsyncImage(url: staticURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        Color.white.opacity(0.08)
+                    }
+                }
+            } else {
+                Color.white.opacity(0.08)
+            }
+
+            if animatedArtwork, let animatedURL {
+                AnimatedArtworkView(url: animatedURL, contentMode: .fill, cornerRadius: 12)
+            }
+        }
+        .frame(width: 72, height: 72)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 6)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
