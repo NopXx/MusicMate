@@ -3,40 +3,40 @@ import AppKit
 
 struct LockScreenPlayerView: View {
     @ObservedObject var viewModel: LockScreenViewModel
-    @State private var isLargeArtwork: Bool = false
 
     var body: some View {
         GeometryReader { geo in
             let snap = viewModel.snapshot
-            let artworkURLString = viewModel.artwork.artworkUltraURL
-                ?? viewModel.artwork.artworkURL
             let animationURLString = viewModel.animatedArtwork
                 ? (viewModel.artwork.animationURL ?? viewModel.artwork.animationTallURL)
                 : nil
-
-            let staticURL = artworkURLString.flatMap(URL.init(string:))
             let animURL = animationURLString.flatMap(URL.init(string:))
 
-            let largeSize = min(geo.size.height * 0.50, geo.size.width * 0.55)
-            let cardWidth = min(680, geo.size.width * 0.55)
+            let largeSize = min(geo.size.height * 0.40, geo.size.width * 0.38)
+            let cardWidth = min(480, geo.size.width * 0.42)
 
             ZStack {
-                BackgroundLayer(
-                    palette: viewModel.palette,
-                    artworkURL: staticURL
-                )
+                if viewModel.isLargeArtwork {
+                    VStack {
+                        LiquidGlassClockView()
+                            .padding(.top, 40)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+                }
 
                 if let snap, snap.hasTrack {
-                    VStack(spacing: 28) {
-                        if isLargeArtwork {
+                    VStack(spacing: 20) {
+                        if viewModel.isLargeArtwork {
                             ArtworkLayer(
-                                staticURL: staticURL,
+                                artworkImage: viewModel.artworkImage,
                                 animatedURL: animURL,
                                 size: largeSize
                             )
                             .onTapGesture {
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                    isLargeArtwork = false
+                                    viewModel.isLargeArtwork = false
                                 }
                             }
                             .transition(.scale(scale: 0.92).combined(with: .opacity))
@@ -47,13 +47,13 @@ struct LockScreenPlayerView: View {
                             showAlbum: viewModel.showAlbum,
                             showProgress: viewModel.showProgress,
                             width: cardWidth,
-                            staticURL: staticURL,
+                            artworkImage: viewModel.artworkImage,
                             animatedURL: animURL,
                             animatedArtwork: viewModel.animatedArtwork,
-                            showInlineArtwork: !isLargeArtwork,
+                            showInlineArtwork: !viewModel.isLargeArtwork,
                             onArtworkTap: {
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                    isLargeArtwork = true
+                                    viewModel.isLargeArtwork = true
                                 }
                             }
                         )
@@ -63,91 +63,107 @@ struct LockScreenPlayerView: View {
                     .padding(.horizontal, CGFloat(viewModel.padding))
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
     }
 }
 
-private struct BackgroundLayer: View {
-    let palette: ArtworkPalette
-    let artworkURL: URL?
+private struct LiquidGlassClockView: View {
+    @State private var now = Date()
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var dateString: String {
+        let f = DateFormatter()
+        f.dateFormat = "EEE d MMM"
+        return f.string(from: now)
+    }
+
+    private var timeString: String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: now)
+    }
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(palette.gradientStart),
-                    Color(palette.gradientMid),
-                    Color(palette.gradientEnd),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            if let url = artworkURL {
-                AsyncImage(url: url) { phase in
-                    if let img = phase.image {
-                        img.resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .blur(radius: 60)
-                            .saturation(2.4)
-                            .brightness(-0.15)
-                            .opacity(0.78)
-                    } else {
-                        Color.clear
-                    }
-                }
-                .clipped()
-            }
-
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.45)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+        VStack(spacing: -12) {
+            GlassText(text: dateString, size: 22, weight: .semibold)
+            GlassText(text: timeString, size: 140, weight: .regular)
+                .monospacedDigit()
         }
-        .mask(
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0.0),
-                    .init(color: .clear, location: 0.18),
-                    .init(color: .black, location: 0.32),
-                    .init(color: .black, location: 1.0),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
+        .onReceive(timer) { now = $0 }
+    }
+}
+
+private struct GlassText: View {
+    let text: String
+    let size: CGFloat
+    let weight: Font.Weight
+
+    var body: some View {
+        let font = Font.system(size: size, weight: weight, design: .rounded)
+
+        Text(text)
+            .font(font)
+            .foregroundStyle(.clear)
+            .overlay(
+                // Glass body — uses Material so it actually refracts what's behind
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(.ultraThinMaterial)
+                    .environment(\.colorScheme, .light)
             )
-        )
+            .overlay(
+                // Top specular highlight (rim light)
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.55),
+                                Color.white.opacity(0.0),
+                                Color.white.opacity(0.0),
+                                Color.white.opacity(0.18),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .blendMode(.plusLighter)
+            )
+            .overlay(
+                // Subtle inner edge for definition
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(.white.opacity(0.12))
+                    .blur(radius: 0.4)
+                    .blendMode(.overlay)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 6)
+            .shadow(color: .black.opacity(0.18), radius: 1, x: 0, y: 1)
     }
 }
 
 private struct ArtworkLayer: View {
-    let staticURL: URL?
+    let artworkImage: NSImage?
     let animatedURL: URL?
     let size: CGFloat
 
     var body: some View {
         ZStack {
-            if let staticURL {
-                AsyncImage(url: staticURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Color.white.opacity(0.05)
-                    }
-                }
+            if let nsImage = artworkImage {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .scaledToFill()
             } else {
                 Color.white.opacity(0.05)
             }
 
             if let animatedURL {
-                AnimatedArtworkView(url: animatedURL, contentMode: .fill, cornerRadius: 28)
+                AnimatedArtworkView(url: animatedURL, contentMode: .fill, cornerRadius: 20)
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.55), radius: 36, x: 0, y: 22)
     }
 }
@@ -157,45 +173,39 @@ private struct NowPlayingCard: View {
     let showAlbum: Bool
     let showProgress: Bool
     let width: CGFloat
-    let staticURL: URL?
+    let artworkImage: NSImage?
     let animatedURL: URL?
     let animatedArtwork: Bool
     let showInlineArtwork: Bool
     let onArtworkTap: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            HStack(spacing: 16) {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
                 if showInlineArtwork {
                     artworkThumbnail
                         .onTapGesture { onArtworkTap() }
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
 
-                VStack(alignment: showInlineArtwork ? .leading : .center, spacing: 4) {
+                VStack(alignment: showInlineArtwork ? .leading : .center, spacing: 2) {
                     Text(snap.title)
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .center)
 
                     Text(snap.artist)
-                        .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .center)
+                }
 
-                    if showAlbum && !snap.album.isEmpty {
-                        Text(snap.album)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.45))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .padding(.top, 1)
-                            .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .center)
-                    }
+                if snap.isPlaying {
+                    EqualizerIcon()
                 }
             }
 
@@ -203,55 +213,80 @@ private struct NowPlayingCard: View {
                 ProgressBar(elapsed: snap.position, duration: snap.duration)
             }
 
-            HStack(spacing: 56) {
-                ControlGlyph(systemName: "backward.fill", size: 26)
-                ControlGlyph(systemName: snap.isPlaying ? "pause.fill" : "play.fill", size: 34)
-                ControlGlyph(systemName: "forward.fill", size: 26)
+            HStack(spacing: 44) {
+                ControlGlyph(systemName: "backward.fill", size: 22)
+                ControlGlyph(systemName: snap.isPlaying ? "pause.fill" : "play.fill", size: 28)
+                ControlGlyph(systemName: "forward.fill", size: 22)
             }
-            .padding(.top, 4)
+            .padding(.top, 2)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 22)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
         .frame(width: width)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(Color.white.opacity(0.04))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
                 )
         )
-        .shadow(color: .black.opacity(0.4), radius: 30, x: 0, y: 18)
+        .shadow(color: .black.opacity(0.35), radius: 24, x: 0, y: 14)
     }
 
     @ViewBuilder
     private var artworkThumbnail: some View {
         ZStack {
-            if let staticURL {
-                AsyncImage(url: staticURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Color.white.opacity(0.08)
-                    }
-                }
+            if let nsImage = artworkImage {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .scaledToFill()
             } else {
                 Color.white.opacity(0.08)
             }
 
             if animatedArtwork, let animatedURL {
-                AnimatedArtworkView(url: animatedURL, contentMode: .fill, cornerRadius: 12)
+                AnimatedArtworkView(url: animatedURL, contentMode: .fill, cornerRadius: 8)
             }
         }
-        .frame(width: 72, height: 72)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.35), radius: 10, x: 0, y: 6)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(width: 52, height: 52)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 3)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct EqualizerIcon: View {
+    @State private var animate = false
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<3, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.white.opacity(0.6))
+                    .frame(width: 3, height: animate ? barHeight(i) : 4)
+            }
+        }
+        .frame(width: 16, height: 16)
+        .onAppear { animate = true }
+        .animation(
+            .easeInOut(duration: 0.5)
+                .repeatForever(autoreverses: true)
+                .delay(Double.random(in: 0...0.2)),
+            value: animate
+        )
+    }
+
+    private func barHeight(_ index: Int) -> CGFloat {
+        switch index {
+        case 0: return 10
+        case 1: return 14
+        default: return 8
+        }
     }
 }
 
@@ -273,25 +308,25 @@ private struct ProgressBar: View {
 
     var body: some View {
         let progress = duration > 0 ? min(1, max(0, elapsed / duration)) : 0
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.18))
+                        .fill(Color.white.opacity(0.15))
                     Capsule()
-                        .fill(Color.white.opacity(0.85))
+                        .fill(Color.white.opacity(0.75))
                         .frame(width: geo.size.width * progress)
                 }
             }
-            .frame(height: 4)
+            .frame(height: 3)
 
             HStack {
                 Text(format(elapsed))
                 Spacer()
-                Text("-" + format(max(0, duration - elapsed)))
+                Text(format(duration))
             }
-            .font(.system(size: 12, weight: .medium, design: .rounded))
-            .foregroundStyle(.white.opacity(0.55))
+            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .foregroundStyle(.white.opacity(0.45))
             .monospacedDigit()
         }
     }

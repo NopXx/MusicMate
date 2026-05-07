@@ -12,7 +12,8 @@ final class LockScreenController: ObservableObject {
     private let log = Logger(subsystem: "com.nopxx.MusicMate", category: "LockScreen")
     private let playerMonitor: PlayerMonitor
     private let viewModel: LockScreenViewModel
-    private var windows: [LockScreenWindow] = []
+    private var backgroundWindows: [LockScreenBackgroundWindow] = []
+    private var playerWindows: [LockScreenWindow] = []
     private var cancellables = Set<AnyCancellable>()
     private var isLocked = false
     private var raiseTimer: Timer?
@@ -97,7 +98,7 @@ final class LockScreenController: ObservableObject {
     }
 
     @objc private func handleScreensChanged() {
-        guard isLocked || isShowingTestPresentation, !windows.isEmpty else { return }
+        guard isLocked || isShowingTestPresentation, !playerWindows.isEmpty else { return }
         log.info("Screen parameters changed — rebuilding windows")
         rebuildWindows()
     }
@@ -120,12 +121,12 @@ final class LockScreenController: ObservableObject {
         let s = SettingsStore.shared
         let enabled = s.bool(["lockscreen", "enabled"])
         let hasTrack = playerMonitor.snapshot?.hasTrack == true
-        log.info("evaluateVisibility — enabled:\(enabled) hasTrack:\(hasTrack) windows:\(self.windows.count)")
+        log.info("evaluateVisibility — enabled:\(enabled) hasTrack:\(hasTrack) windows:\(self.playerWindows.count)")
         guard enabled, hasTrack else {
             dismiss()
             return
         }
-        if windows.isEmpty {
+        if playerWindows.isEmpty {
             present()
         } else {
             applyScreensIfNeeded()
@@ -136,31 +137,42 @@ final class LockScreenController: ObservableObject {
         let targets = targetScreens()
         log.info("present — \(targets.count) screen(s)")
         for screen in targets {
-            let window = LockScreenWindow(screen: screen)
-            let host = NSHostingController(rootView: LockScreenPlayerView(viewModel: viewModel))
-            host.view.frame = NSRect(origin: .zero, size: screen.frame.size)
-            window.contentViewController = host
-            window.setFrame(screen.frame, display: true)
-            // Promote into a private SkyLight space pinned above the lock UI
-            // BEFORE ordering front — SkyLightWindow does this in the same
-            // order so the window's first composite already happens in the
-            // promoted space.
-            SkyLightOperator.shared.promoteAboveLockScreen(window)
-            window.makeKeyAndOrderFront(nil)
-            log.info("Window shown — frame:\(NSStringFromRect(screen.frame), privacy: .public) windowNumber:\(window.windowNumber)")
-            windows.append(window)
+            let bgWindow = LockScreenBackgroundWindow(screen: screen)
+            let bgHost = NSHostingController(rootView: ArtworkLockScreenView(viewModel: viewModel))
+            bgHost.view.frame = NSRect(origin: .zero, size: screen.frame.size)
+            bgWindow.contentViewController = bgHost
+            bgWindow.setFrame(screen.frame, display: true)
+            SkyLightOperator.shared.promoteAboveLockScreen(bgWindow)
+            bgWindow.makeKeyAndOrderFront(nil)
+            backgroundWindows.append(bgWindow)
+
+            let playerWindow = LockScreenWindow(screen: screen)
+            let playerHost = NSHostingController(rootView: LockScreenPlayerView(viewModel: viewModel))
+            playerHost.view.frame = NSRect(origin: .zero, size: screen.frame.size)
+            playerWindow.contentViewController = playerHost
+            playerWindow.setFrame(screen.frame, display: true)
+            SkyLightOperator.shared.promoteAboveLockScreen(playerWindow)
+            playerWindow.makeKeyAndOrderFront(nil)
+            playerWindows.append(playerWindow)
+
+            log.info("Windows shown — frame:\(NSStringFromRect(screen.frame), privacy: .public)")
         }
     }
 
     private func dismiss() {
         stopRaiseLoop()
-        guard !windows.isEmpty else { return }
-        log.info("dismiss — closing \(self.windows.count) window(s)")
-        for window in windows {
+        guard !backgroundWindows.isEmpty || !playerWindows.isEmpty else { return }
+        log.info("dismiss — closing \(self.backgroundWindows.count + self.playerWindows.count) window(s)")
+        for window in backgroundWindows {
             window.orderOut(nil)
             window.contentViewController = nil
         }
-        windows.removeAll()
+        for window in playerWindows {
+            window.orderOut(nil)
+            window.contentViewController = nil
+        }
+        backgroundWindows.removeAll()
+        playerWindows.removeAll()
     }
 
     /// Re-call `orderFrontRegardless` on every window. macOS's loginwindow
@@ -168,10 +180,12 @@ final class LockScreenController: ObservableObject {
     /// can cover our window. Calling `orderFrontRegardless` again pushes us
     /// back on top.
     private func raiseAllWindows() {
-        for window in windows {
+        for window in backgroundWindows {
             window.orderFrontRegardless()
-            // Re-assert the SkyLight promotion in case the WindowServer
-            // demoted us during the lock-UI animation.
+            SkyLightOperator.shared.promoteAboveLockScreen(window)
+        }
+        for window in playerWindows {
+            window.orderFrontRegardless()
             SkyLightOperator.shared.promoteAboveLockScreen(window)
         }
     }
@@ -186,7 +200,7 @@ final class LockScreenController: ObservableObject {
         raiseTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] timer in
             Task { @MainActor in
                 guard let self else { timer.invalidate(); return }
-                if Date().timeIntervalSince(start) > 3.0 || self.windows.isEmpty {
+                if Date().timeIntervalSince(start) > 3.0 || self.playerWindows.isEmpty {
                     timer.invalidate()
                     self.raiseTimer = nil
                     return
@@ -208,7 +222,7 @@ final class LockScreenController: ObservableObject {
 
     private func applyScreensIfNeeded() {
         let targetIDs = Set(targetScreens().compactMap(screenID))
-        let currentIDs = Set(windows.compactMap { $0.screen.flatMap(screenID) })
+        let currentIDs = Set(playerWindows.compactMap { $0.screen.flatMap(screenID) })
         if targetIDs != currentIDs {
             rebuildWindows()
         }

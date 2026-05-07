@@ -6,7 +6,9 @@ import AppKit
 final class LockScreenViewModel: ObservableObject {
     @Published var snapshot: NowPlayingSnapshot?
     @Published var artwork: ArtworkResult = ArtworkResult()
+    @Published var artworkImage: NSImage?
     @Published var palette: ArtworkPalette = .default
+    @Published var isLargeArtwork: Bool = false
 
     @Published var showAlbum: Bool = true
     @Published var showProgress: Bool = true
@@ -54,6 +56,7 @@ final class LockScreenViewModel: ObservableObject {
     private func handleTrackUpdate(_ snap: NowPlayingSnapshot?) {
         guard let snap, snap.hasTrack else {
             artwork = ArtworkResult()
+            artworkImage = nil
             palette = .default
             lastArtworkKey = ""
             lastPaletteURL = ""
@@ -68,9 +71,17 @@ final class LockScreenViewModel: ObservableObject {
         let title = snap.title, artist = snap.artist, album = snap.album
         Task { [weak self] in
             let result = await ArtworkService.shared.lookup(title: title, artist: artist, album: album)
+            let imgURLString = result.artworkUltraURL ?? result.artworkURL
+            var downloadedImage: NSImage?
+            if let imgURLString, let imgURL = URL(string: imgURLString) {
+                if let (data, _) = try? await URLSession.shared.data(from: imgURL) {
+                    downloadedImage = NSImage(data: data)
+                }
+            }
             await MainActor.run {
                 guard let self, self.lastArtworkKey == key else { return }
                 self.artwork = result
+                self.artworkImage = downloadedImage
                 if let url = result.artworkURL, !url.isEmpty, url != self.lastPaletteURL {
                     self.lastPaletteURL = url
                     Task { [weak self] in
