@@ -4,10 +4,8 @@ import Combine
 import os
 
 @MainActor
-final class LockScreenController: ObservableObject {
+final class LockScreenController {
     static var shared: LockScreenController?
-
-    @Published private(set) var isShowingTestPresentation: Bool = false
 
     private let log = Logger(subsystem: "com.nopxx.MusicMate", category: "LockScreen")
     private let playerMonitor: PlayerMonitor
@@ -56,9 +54,9 @@ final class LockScreenController: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] snap in
                 guard let self else { return }
-                if (self.isLocked || self.isShowingTestPresentation), snap?.hasTrack != true {
+                if self.isLocked, snap?.hasTrack != true {
                     self.dismiss()
-                } else if self.isLocked || self.isShowingTestPresentation {
+                } else if self.isLocked {
                     self.evaluateVisibility()
                 }
             }
@@ -83,7 +81,7 @@ final class LockScreenController: ObservableObject {
         log.info("DistributedNotification: screenIsUnlocked")
         isLocked = false
         stopRaiseLoop()
-        if !isShowingTestPresentation { dismiss() }
+        dismiss()
     }
 
     @objc private func handleLockUIShown() {
@@ -98,26 +96,17 @@ final class LockScreenController: ObservableObject {
     }
 
     @objc private func handleScreensChanged() {
-        guard isLocked || isShowingTestPresentation, !playerWindows.isEmpty else { return }
+        guard isLocked, !playerWindows.isEmpty else { return }
         log.info("Screen parameters changed — rebuilding windows")
         rebuildWindows()
     }
 
-    /// Force-show the lock screen window without waiting for a real lock event.
-    /// Used by Settings → Lock Screen → "Show Now" for testing the overlay
-    /// without locking the machine.
-    func toggleTestPresentation() {
-        isShowingTestPresentation.toggle()
-        log.info("Test presentation toggled → \(self.isShowingTestPresentation)")
-        if isShowingTestPresentation {
-            present()
-        } else if !isLocked {
-            dismiss()
-        }
+    func setFullscreenAnimationActive(_ active: Bool) {
+        viewModel.fullscreenAnimationActive = active
     }
 
     private func evaluateVisibility() {
-        guard isLocked || isShowingTestPresentation else { return }
+        guard isLocked else { return }
         let s = SettingsStore.shared
         let enabled = s.bool(["lockscreen", "enabled"])
         let hasTrack = playerMonitor.snapshot?.hasTrack == true

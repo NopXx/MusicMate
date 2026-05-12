@@ -9,12 +9,15 @@ final class LockScreenViewModel: ObservableObject {
     @Published var artworkImage: NSImage?
     @Published var palette: ArtworkPalette = .default
     @Published var isLargeArtwork: Bool = false
+    @Published var fullscreenAnimationActive: Bool = false
 
     @Published var showAlbum: Bool = true
     @Published var showProgress: Bool = true
     @Published var animatedArtwork: Bool = true
     @Published var backgroundBlur: Int = 60
+    @Published var backgroundStyle: LockScreenBackgroundStyle = .blurredArtwork
     @Published var padding: Int = 32
+    @Published var clockGlassStyle: GlassTextVariant = .regular
 
     private weak var monitor: PlayerMonitor?
     private var cancellables = Set<AnyCancellable>()
@@ -49,8 +52,11 @@ final class LockScreenViewModel: ObservableObject {
         animatedArtwork = s.bool(["lockscreen", "animated_artwork"])
         let blur = s.int(["lockscreen", "background_blur"])
         backgroundBlur = blur > 0 ? blur : 60
+        backgroundStyle = .blurredArtwork
         let pad = s.int(["lockscreen", "padding"])
         padding = pad > 0 ? pad : 32
+        let style = s.string(["lockscreen", "clock_glass_style"])
+        clockGlassStyle = GlassTextVariant(rawValue: style) ?? .regular
     }
 
     private func handleTrackUpdate(_ snap: NowPlayingSnapshot?) {

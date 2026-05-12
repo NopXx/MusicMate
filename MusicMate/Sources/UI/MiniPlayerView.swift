@@ -6,6 +6,10 @@ struct MiniPlayerView: View {
     @State private var showEditPopover: Bool = false
 
     private var animationsOn: Bool { viewModel.miniplayerAnimation != "off" }
+    private var hasAnimation: Bool {
+        guard let s = viewModel.artwork.animationURL, !s.isEmpty else { return false }
+        return true
+    }
     private var hasTallVideo: Bool {
         animationsOn
         && viewModel.miniplayerAnimation == "full"
@@ -166,6 +170,7 @@ struct MiniPlayerView: View {
         .frame(width: 272, height: 272)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.55), radius: 20, x: 0, y: 16)
+        .onTapGesture { openFullscreenAnimation() }
     }
 
     @ViewBuilder
@@ -544,6 +549,11 @@ struct MiniPlayerView: View {
     private func openSettings() { AppDelegate.shared?.openSettings() }
     private func quit() { NSApp.terminate(nil) }
     private func openEdit() { showEditPopover = true }
+    private func openFullscreenAnimation() {
+        guard viewModel.animationFullscreenEnabled,
+              hasAnimation else { return }
+        viewModel.showFullscreenAnimation = true
+    }
 }
 
 private extension String {

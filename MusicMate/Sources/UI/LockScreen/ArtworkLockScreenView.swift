@@ -3,24 +3,61 @@ import AppKit
 
 struct ArtworkLockScreenView: View {
     @ObservedObject var viewModel: LockScreenViewModel
+    private var animationURL: URL? {
+        guard viewModel.animatedArtwork else { return nil }
+        let s = viewModel.artwork.animationSquareUltraURL ?? viewModel.artwork.animationURL ?? viewModel.artwork.animationTallURL
+        guard let s, !s.isEmpty else { return nil }
+        return URL(string: s)
+    }
+    var body: some View {
+        ZStack {
+            if let url = animationURL {
+                AnimatedArtworkView(url: url, staticImage: viewModel.artworkImage, contentMode: .fill, cornerRadius: 0)
+
+                LinearGradient(
+                    colors: [
+                        .black.opacity(0.15),
+                        .black.opacity(0.0),
+                        .black.opacity(0.55),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            } else {
+                BlurredArtworkBackground(palette: viewModel.palette, artworkImage: viewModel.artworkImage, blur: viewModel.backgroundBlur)
+            }
+        }
+        .opacity(viewModel.isLargeArtwork && !viewModel.fullscreenAnimationActive ? 1 : 0)
+        .animation(.easeInOut(duration: 0.4), value: viewModel.isLargeArtwork)
+        .animation(.easeInOut(duration: 0.4), value: viewModel.fullscreenAnimationActive)
+        .ignoresSafeArea()
+    }
+}
+
+// MARK: - Blurred Artwork (original)
+
+private struct BlurredArtworkBackground: View {
+    let palette: ArtworkPalette
+    let artworkImage: NSImage?
+    let blur: Int
 
     var body: some View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(viewModel.palette.gradientStart),
-                    Color(viewModel.palette.gradientMid),
-                    Color(viewModel.palette.gradientEnd),
+                    Color(palette.gradientStart),
+                    Color(palette.gradientMid),
+                    Color(palette.gradientEnd),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
-            if let nsImage = viewModel.artworkImage {
+            if let nsImage = artworkImage {
                 Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .blur(radius: 60)
+                    .blur(radius: CGFloat(blur))
                     .saturation(2.4)
                     .brightness(-0.15)
                     .opacity(0.78)
@@ -32,8 +69,6 @@ struct ArtworkLockScreenView: View {
                 endPoint: .bottom
             )
         }
-        .opacity(viewModel.isLargeArtwork ? 1 : 0)
-        .animation(.easeInOut(duration: 0.4), value: viewModel.isLargeArtwork)
-        .ignoresSafeArea()
     }
 }
+

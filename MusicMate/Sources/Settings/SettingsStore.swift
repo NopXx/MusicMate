@@ -42,9 +42,6 @@ final class SettingsStore: ObservableObject {
                 "urls": [String](),
                 "heartbeat_seconds": 0,
             ],
-            "nowplaying": [
-                "mode": "mirror",
-            ],
             "menubar": [
                 "show_icon": true,
                 "show_track": true,
@@ -58,6 +55,7 @@ final class SettingsStore: ObservableObject {
                 "animation": "full",
                 "animation_quality": "high",
                 "artwork_style": "classic",
+                "animation_fullscreen": false,
             ],
             "widget": [
                 "large_artwork_style": "normal",
@@ -68,8 +66,10 @@ final class SettingsStore: ObservableObject {
                 "show_progress": true,
                 "animated_artwork": true,
                 "background_blur": 60,
+                "background_style": "blurred_artwork",
                 "padding": 32,
                 "screens": "main",
+                "clock_glass_style": "regular",
             ],
         ]
     }

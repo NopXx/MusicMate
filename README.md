@@ -10,12 +10,14 @@ Written in Swift / SwiftUI. Talks to Music.app via ScriptingBridge. Replaces an 
 - **Mini player popover** — three layouts (Classic / Tall / Immersive), animated artwork, blurred backdrop, dominant-color gradient, scrubber
 - **Last.fm scrobbling** — `track.updateNowPlaying` on play, `track.scrobble` once per play (configurable threshold), with auth flow and Keychain-style local config
 - **Pending scrobble queue** — failed scrobbles are persisted to SQLite and retried on launch + every 5 minutes
-- **Now Playing integration** — `MPNowPlayingInfoCenter` Mirror or Takeover modes for lock screen / Control Center
+- **Now Playing takeover** — `MPNowPlayingInfoCenter` with silent-audio looper so MusicMate owns the lock screen / Control Center slot, artwork included
 - **Notifications** — banner with artwork on track change and scrobble success
 - **Webhooks** — POST JSON payloads in Music-Scrobbler format with optional heartbeat
 - **Listening history** — every play / pause / resume / scrobble event is recorded to SQLite; viewable in Settings
 - **Edit rules** — automatically rewrite artist / track / album metadata before scrobbling, configurable inline from the mini player or in Settings
 - **Import / export** — Edit-rule JSON is interchangeable with the legacy apple-music Python edition
+- **Lock screen overlay** — full-screen now-playing window rendered above the macOS login UI via SkyLight private API (space pinning at NotificationCenterAtScreenLock level)
+- **Localization** — Thai and English; switchable in Settings → General
 - **First-launch migration** — automatically imports settings, history, and edit rules from a sibling `apple-music` Python install
 
 ## Requirements
@@ -43,7 +45,7 @@ PlayerMonitor          ──┐
   + DistributedNotif     ├─►  ScrobblerService  ──►  Last.fm
   + 1 Hz tick timer      │      └─► PendingScrobbleQueue (retry)
                          │
-                         ├─►  NowPlayingService (Mirror / Takeover)
+                         ├─►  NowPlayingService (Takeover)
                          │
                          ├─►  WebhookDispatcher
                          │
@@ -51,9 +53,13 @@ PlayerMonitor          ──┐
                          │
                          ├─►  HistoryRecorder ──► HistoryStore (SQLite)
                          │
-                         └─►  MenuBarController + MiniPlayer (SwiftUI)
+                         ├─►  MenuBarController + MiniPlayer (SwiftUI)
+                         │
+                         └─►  LockScreenController
+                                └─► SkyLightOperator (private CGS space pinning)
 
 EditHistoryService  ──►  applies rules before scrobble / webhook / display
+L10n                ──►  runtime i18n (Thai / English) via SettingsStore
 ```
 
 - `PlayerMonitor` owns a single `MusicApplication` ScriptingBridge object and listens to `com.apple.Music.playerInfo` distributed notifications. A 1 Hz timer ticks position locally; full state resyncs only fire on actual events.
@@ -80,8 +86,10 @@ MusicMate/
     History/                 HistoryStore, HistoryRecorder, EditHistoryService
     Notifications/           NotificationService
     Webhooks/                WebhookDispatcher
+    Helpers/                 L10n (i18n), TextToShape
     Settings/                SettingsStore, MigrationService
     UI/                      MenuBarController, MiniPlayer*, SettingsView, SettingsWindowController
+      LockScreen/            LockScreenController, SkyLightOperator, LockScreenWindow, LockScreenPlayerView
   MusicMate-Bridging-Header.h
   Info.plist
   MusicMate.entitlements
@@ -100,7 +108,7 @@ Most features described above are implemented and working. Outstanding:
 
 - Widget extension (target exists as a skeleton)
 - Last.fm session-key migration to Keychain
-- Localization / `Localizable.strings`
+- Localization for non-Settings views (MiniPlayer, AnimationFullscreen)
 - App icon, code signing, notarization, auto-update
 
 See [TODO.md](TODO.md) for the live punch list.
@@ -109,7 +117,7 @@ See [TODO.md](TODO.md) for the live punch list.
 
 Reference Python implementation that this project is reimagining: a sibling `apple-music` directory in the same workspace.
 
-Artwork lookup uses [`apple-music-artwork-search`](https://apple-music-artwork-search.vercel.app/).
+Artwork lookup uses [`apple-music-artwork-search`](https://apple-music-artwork.nopxx.site/).
 
 ## License
 

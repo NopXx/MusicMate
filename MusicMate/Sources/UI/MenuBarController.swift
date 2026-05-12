@@ -8,6 +8,7 @@ final class MenuBarController {
     private let popover: NSPopover
     private let playerMonitor: PlayerMonitor
     private let viewModel: MiniPlayerViewModel
+    private let animationFullscreenController: AnimationFullscreenController
     private var cancellables = Set<AnyCancellable>()
 
     init(playerMonitor: PlayerMonitor, scrobbler: ScrobblerService) {
@@ -15,6 +16,7 @@ final class MenuBarController {
         self.viewModel = MiniPlayerViewModel(monitor: playerMonitor, scrobbler: scrobbler)
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.popover = NSPopover()
+        self.animationFullscreenController = AnimationFullscreenController(viewModel: self.viewModel)
         self.popover.behavior = .transient
         self.popover.contentSize = NSSize(width: 320, height: 505)
         self.popover.contentViewController = NSHostingController(rootView: MiniPlayerView(viewModel: viewModel))

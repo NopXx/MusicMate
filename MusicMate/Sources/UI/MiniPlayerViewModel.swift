@@ -13,6 +13,8 @@ final class MiniPlayerViewModel: ObservableObject {
     @Published var miniplayerAnimation: String = "full"
     @Published var miniplayerMeta: String = "artist_album"
     @Published var artworkStyle: String = "classic"
+    @Published var showFullscreenAnimation: Bool = false
+    @Published var animationFullscreenEnabled: Bool = false
 
     private weak var monitor: PlayerMonitor?
     private weak var scrobbler: ScrobblerService?
@@ -30,6 +32,7 @@ final class MiniPlayerViewModel: ObservableObject {
         self.miniplayerMeta = meta.isEmpty ? "artist_album" : meta
         let style = SettingsStore.shared.string(["miniplayer", "artwork_style"])
         self.artworkStyle = style.isEmpty ? "classic" : style
+        self.animationFullscreenEnabled = SettingsStore.shared.bool(["miniplayer", "animation_fullscreen"])
 
         SettingsStore.shared.$data
             .receive(on: DispatchQueue.main)
@@ -42,6 +45,7 @@ final class MiniPlayerViewModel: ObservableObject {
                 self.miniplayerMeta = m.isEmpty ? "artist_album" : m
                 let st = SettingsStore.shared.string(["miniplayer", "artwork_style"])
                 self.artworkStyle = st.isEmpty ? "classic" : st
+                self.animationFullscreenEnabled = SettingsStore.shared.bool(["miniplayer", "animation_fullscreen"])
             }
             .store(in: &cancellables)
 

@@ -5,12 +5,13 @@ struct ArtworkResult {
     var artworkUltraURL: String?
     var animationURL: String?
     var animationTallURL: String?
+    var animationSquareUltraURL: String?
 }
 
 actor ArtworkService {
     static let shared = ArtworkService()
 
-    private let endpoint = URL(string: "https://apple-music-artwork-search.vercel.app/api/search")!
+    private let endpoint = URL(string: "https://apple-music-artwork.nopxx.site/api/search")!
     private var cache: [String: ArtworkResult] = [:]
 
     func lookup(title: String, artist: String, album: String) async -> ArtworkResult {
@@ -41,7 +42,8 @@ actor ArtworkService {
                 artworkURL: pick?.artworkHi ?? pick?.artwork,
                 artworkUltraURL: pick?.artworkUltra ?? pick?.artworkHi,
                 animationURL: pick?.animation?.best,
-                animationTallURL: pick?.animation?.bestTall
+                animationTallURL: pick?.animation?.bestTall,
+                animationSquareUltraURL: pick?.animation?.square?["2160p"] ?? pick?.animation?.square?["1920p"] ?? pick?.animation?.best
             )
             cache[key] = result
             return result
@@ -88,4 +90,5 @@ private struct SearchItem: Decodable {
 private struct AnimationObject: Decodable {
     var best: String?
     var bestTall: String?
+    var square: [String: String]?
 }

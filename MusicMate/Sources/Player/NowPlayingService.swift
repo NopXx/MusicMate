@@ -5,9 +5,7 @@ import AVFoundation
 import Combine
 
 @MainActor
-final class NowPlayingService: ObservableObject {
-    @Published var mode: String = "mirror"
-
+final class NowPlayingService {
     private weak var monitor: PlayerMonitor?
     private var cancellables = Set<AnyCancellable>()
     private var artworkTask: Task<Void, Never>?
@@ -25,8 +23,6 @@ final class NowPlayingService: ObservableObject {
 
     func attach(monitor: PlayerMonitor) {
         self.monitor = monitor
-        let stored = SettingsStore.shared.string(["nowplaying", "mode"])
-        self.mode = stored.isEmpty ? "mirror" : stored
 
         monitor.$snapshot
             .receive(on: DispatchQueue.main)
@@ -35,37 +31,10 @@ final class NowPlayingService: ObservableObject {
             }
             .store(in: &cancellables)
 
-        SettingsStore.shared.$data
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                let m = SettingsStore.shared.string(["nowplaying", "mode"])
-                let next = m.isEmpty ? "mirror" : m
-                if self?.mode != next {
-                    self?.mode = next
-                    self?.applyMode()
-                }
-            }
-            .store(in: &cancellables)
-
-        applyMode()
-    }
-
-    // MARK: - Mode switching
-
-    private func applyMode() {
-        if mode == "takeover" {
-            startSilentAudio()
-            registerCommands()
-            startRepublishTimer()
-            update(monitor?.snapshot)
-        } else {
-            unregisterCommands()
-            stopRepublishTimer()
-            stopSilentAudio()
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-            MPNowPlayingInfoCenter.default().playbackState = .stopped
-            lastArtworkURL = ""
-        }
+        startSilentAudio()
+        registerCommands()
+        startRepublishTimer()
+        update(monitor.snapshot)
     }
 
     // MARK: - Silent audio (AVPlayer)
@@ -233,7 +202,7 @@ final class NowPlayingService: ObservableObject {
     /// Re-set the nowPlayingInfo to reassert ownership of the Now Playing
     /// slot.  macOS picks the "last writer" so we must write periodically.
     private func republish() {
-        guard mode == "takeover", let info = lastPublishedInfo else { return }
+        guard let info = lastPublishedInfo else { return }
         let center = MPNowPlayingInfoCenter.default()
 
         // Update elapsed time from the live snapshot
@@ -247,7 +216,6 @@ final class NowPlayingService: ObservableObject {
     }
 
     private func update(_ snap: NowPlayingSnapshot?) {
-        guard mode == "takeover" else { return }
         let center = MPNowPlayingInfoCenter.default()
         guard let snap, snap.hasTrack else {
             center.nowPlayingInfo = nil
@@ -298,7 +266,7 @@ final class NowPlayingService: ObservableObject {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 guard let img = NSImage(data: data) else { return }
                 await MainActor.run {
-                    guard let self, self.mode == "takeover" else { return }
+                    guard let self else { return }
                     let artwork = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
                     var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                     info[MPMediaItemPropertyArtwork] = artwork

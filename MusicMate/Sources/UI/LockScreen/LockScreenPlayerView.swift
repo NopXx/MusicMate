@@ -13,13 +13,23 @@ struct LockScreenPlayerView: View {
             let animURL = animationURLString.flatMap(URL.init(string:))
 
             let largeSize = min(geo.size.height * 0.40, geo.size.width * 0.38)
-            let cardWidth = min(480, geo.size.width * 0.42)
+            let cardWidth = min(350, geo.size.width * 0.35)
 
             ZStack {
-                if viewModel.isLargeArtwork {
+                if viewModel.isLargeArtwork && !viewModel.fullscreenAnimationActive {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                                viewModel.isLargeArtwork = false
+                            }
+                        }
+                }
+
+                if viewModel.isLargeArtwork && !viewModel.fullscreenAnimationActive {
                     VStack {
-                        LiquidGlassClockView()
-                            .padding(.top, 40)
+                        LiquidGlassClockView(glassVariant: viewModel.clockGlassStyle)
+                            .padding(.top, 110)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -28,7 +38,7 @@ struct LockScreenPlayerView: View {
 
                 if let snap, snap.hasTrack {
                     VStack(spacing: 20) {
-                        if viewModel.isLargeArtwork {
+                        if viewModel.isLargeArtwork && !viewModel.fullscreenAnimationActive && animURL == nil {
                             ArtworkLayer(
                                 artworkImage: viewModel.artworkImage,
                                 animatedURL: animURL,
@@ -50,7 +60,7 @@ struct LockScreenPlayerView: View {
                             artworkImage: viewModel.artworkImage,
                             animatedURL: animURL,
                             animatedArtwork: viewModel.animatedArtwork,
-                            showInlineArtwork: !viewModel.isLargeArtwork,
+                            showInlineArtwork: !viewModel.isLargeArtwork && !viewModel.fullscreenAnimationActive,
                             onArtworkTap: {
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                                     viewModel.isLargeArtwork = true
@@ -59,7 +69,7 @@ struct LockScreenPlayerView: View {
                         )
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, CGFloat(viewModel.padding) + 40)
+                    .padding(.bottom, CGFloat(viewModel.padding) + 160)
                     .padding(.horizontal, CGFloat(viewModel.padding))
                 }
             }
@@ -69,6 +79,8 @@ struct LockScreenPlayerView: View {
 }
 
 private struct LiquidGlassClockView: View {
+    var glassVariant: GlassTextVariant = .regular
+
     @State private var now = Date()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -85,61 +97,19 @@ private struct LiquidGlassClockView: View {
     }
 
     var body: some View {
-        VStack(spacing: -12) {
-            GlassText(text: dateString, size: 22, weight: .semibold)
-            GlassText(text: timeString, size: 140, weight: .regular)
-                .monospacedDigit()
+        VStack(spacing: 8) {
+            GlassEffectText(
+                text: dateString,
+                font: NSFont.systemFont(ofSize: 32, weight: .semibold),
+                variant: glassVariant
+            )
+            GlassEffectText(
+                text: timeString,
+                font: NSFont.systemFont(ofSize: 150, weight: .bold),
+                variant: glassVariant
+            )
         }
         .onReceive(timer) { now = $0 }
-    }
-}
-
-private struct GlassText: View {
-    let text: String
-    let size: CGFloat
-    let weight: Font.Weight
-
-    var body: some View {
-        let font = Font.system(size: size, weight: weight, design: .rounded)
-
-        Text(text)
-            .font(font)
-            .foregroundStyle(.clear)
-            .overlay(
-                // Glass body — uses Material so it actually refracts what's behind
-                Text(text)
-                    .font(font)
-                    .foregroundStyle(.ultraThinMaterial)
-                    .environment(\.colorScheme, .light)
-            )
-            .overlay(
-                // Top specular highlight (rim light)
-                Text(text)
-                    .font(font)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.55),
-                                Color.white.opacity(0.0),
-                                Color.white.opacity(0.0),
-                                Color.white.opacity(0.18),
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .blendMode(.plusLighter)
-            )
-            .overlay(
-                // Subtle inner edge for definition
-                Text(text)
-                    .font(font)
-                    .foregroundStyle(.white.opacity(0.12))
-                    .blur(radius: 0.4)
-                    .blendMode(.overlay)
-            )
-            .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 6)
-            .shadow(color: .black.opacity(0.18), radius: 1, x: 0, y: 1)
     }
 }
 
@@ -150,16 +120,14 @@ private struct ArtworkLayer: View {
 
     var body: some View {
         ZStack {
-            if let nsImage = artworkImage {
+            if let animatedURL {
+                AnimatedArtworkView(url: animatedURL, staticImage: artworkImage, contentMode: .fill, cornerRadius: 20)
+            } else if let nsImage = artworkImage {
                 Image(nsImage: nsImage)
                     .resizable()
                     .scaledToFill()
             } else {
                 Color.white.opacity(0.05)
-            }
-
-            if let animatedURL {
-                AnimatedArtworkView(url: animatedURL, contentMode: .fill, cornerRadius: 20)
             }
         }
         .frame(width: size, height: size)
@@ -215,8 +183,11 @@ private struct NowPlayingCard: View {
 
             HStack(spacing: 44) {
                 ControlGlyph(systemName: "backward.fill", size: 22)
+                    .onTapGesture { MusicAppController.previous() }
                 ControlGlyph(systemName: snap.isPlaying ? "pause.fill" : "play.fill", size: 28)
+                    .onTapGesture { MusicAppController.playPause() }
                 ControlGlyph(systemName: "forward.fill", size: 22)
+                    .onTapGesture { MusicAppController.next() }
             }
             .padding(.top, 2)
         }
@@ -225,32 +196,26 @@ private struct NowPlayingCard: View {
         .frame(width: width)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.white.opacity(0.04))
+                .fill(.clear)
+                .glassEffect(
+                    Glass.clear.tint(.white.opacity(0.05)),
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                )
+                .opacity(0.6)
         )
-        .shadow(color: .black.opacity(0.35), radius: 24, x: 0, y: 14)
     }
 
     @ViewBuilder
     private var artworkThumbnail: some View {
         ZStack {
-            if let nsImage = artworkImage {
+            if animatedArtwork, let animatedURL {
+                AnimatedArtworkView(url: animatedURL, staticImage: artworkImage, contentMode: .fill, cornerRadius: 8)
+            } else if let nsImage = artworkImage {
                 Image(nsImage: nsImage)
                     .resizable()
                     .scaledToFill()
             } else {
                 Color.white.opacity(0.08)
-            }
-
-            if animatedArtwork, let animatedURL {
-                AnimatedArtworkView(url: animatedURL, contentMode: .fill, cornerRadius: 8)
             }
         }
         .frame(width: 52, height: 52)

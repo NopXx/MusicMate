@@ -21,14 +21,13 @@ final class SettingsViewModel: ObservableObject {
     @Published var miniplayerMeta: String
     @Published var miniplayerAnimation: String
     @Published var miniplayerArtworkStyle: String
+    @Published var animationFullscreen: Bool
 
     @Published var menubarShowIcon: Bool
     @Published var menubarShowTrack: Bool
     @Published var menubarShowArtist: Bool
     @Published var menubarShowState: Bool
     @Published var menubarMaxLength: Int
-
-    @Published var nowPlayingMode: String
 
     @Published var webhookEnabled: Bool
     @Published var webhookHeartbeat: Int
@@ -40,8 +39,12 @@ final class SettingsViewModel: ObservableObject {
     @Published var lockscreenShowProgress: Bool
     @Published var lockscreenAnimatedArtwork: Bool
     @Published var lockscreenBackgroundBlur: Double
+    @Published var lockscreenBackgroundStyle: String
     @Published var lockscreenPadding: Int
     @Published var lockscreenScreens: String
+    @Published var lockscreenClockGlassStyle: String
+
+    @Published var language: String
 
     private let store = SettingsStore.shared
     private var pollTask: Task<Void, Never>?
@@ -67,9 +70,7 @@ final class SettingsViewModel: ObservableObject {
         self.miniplayerAnimation = anim.isEmpty ? "full" : anim
         let style = store.string(["miniplayer", "artwork_style"])
         self.miniplayerArtworkStyle = style.isEmpty ? "classic" : style
-
-        let mode = store.string(["nowplaying", "mode"])
-        self.nowPlayingMode = mode.isEmpty ? "mirror" : mode
+        self.animationFullscreen = store.bool(["miniplayer", "animation_fullscreen"])
 
         self.menubarShowIcon = store.bool(["menubar", "show_icon"])
         self.menubarShowTrack = store.bool(["menubar", "show_track"])
@@ -89,10 +90,17 @@ final class SettingsViewModel: ObservableObject {
         self.lockscreenAnimatedArtwork = store.bool(["lockscreen", "animated_artwork"])
         let blur = store.int(["lockscreen", "background_blur"])
         self.lockscreenBackgroundBlur = Double(blur > 0 ? blur : 60)
+        let bgStyle = store.string(["lockscreen", "background_style"])
+        self.lockscreenBackgroundStyle = bgStyle.isEmpty ? "mesh_gradient" : bgStyle
         let pad = store.int(["lockscreen", "padding"])
         self.lockscreenPadding = pad > 0 ? pad : 32
         let scr = store.string(["lockscreen", "screens"])
         self.lockscreenScreens = scr.isEmpty ? "main" : scr
+        let clockStyle = store.string(["lockscreen", "clock_glass_style"])
+        self.lockscreenClockGlassStyle = clockStyle.isEmpty ? "regular" : clockStyle
+
+        let lang = store.string(["language"])
+        self.language = lang.isEmpty ? "th" : lang
     }
 
     var hasSession: Bool {
@@ -112,7 +120,7 @@ final class SettingsViewModel: ObservableObject {
         let key = (lf["api_key"] as? String) ?? ""
         let secret = (lf["api_secret"] as? String) ?? ""
         guard !key.isEmpty, !secret.isEmpty else {
-            statusMessage = "ต้องใส่ API Key และ Secret ก่อน"
+            statusMessage = L10n.lastfmNeedKeys
             return
         }
         statusMessage = ""
@@ -124,7 +132,7 @@ final class SettingsViewModel: ObservableObject {
                 guard let self else { return }
                 guard let token = res["token"] as? String else {
                     self.connecting = false
-                    self.statusMessage = (res["message"] as? String) ?? "ขอ token ไม่สำเร็จ"
+                    self.statusMessage = (res["message"] as? String) ?? L10n.lastfmTokenFail
                     return
                 }
                 self.store.merge(["lastfm": ["pending_token": token]])
@@ -149,7 +157,7 @@ final class SettingsViewModel: ObservableObject {
 
     func disconnect() {
         cancelConnect()
-        statusMessage = "ตัดการเชื่อมต่อแล้ว"
+        statusMessage = L10n.lastfmDisconnected
     }
 
     private func startPolling() {
@@ -179,7 +187,7 @@ final class SettingsViewModel: ObservableObject {
                         self.lastfmEnabled = true
                         self.hasPendingToken = false
                         self.connecting = false
-                        self.statusMessage = "เชื่อมต่อกับ Last.fm เป็น \(name)"
+                        self.statusMessage = L10n.lastfmConnectedAs(name)
                     }
                     return
                 }
@@ -187,7 +195,7 @@ final class SettingsViewModel: ObservableObject {
             await MainActor.run {
                 self?.connecting = false
                 self?.hasPendingToken = false
-                self?.statusMessage = "หมดเวลารอ — ลองอีกครั้ง"
+                self?.statusMessage = L10n.lastfmTimeout
             }
         }
     }
@@ -205,10 +213,6 @@ final class SettingsViewModel: ObservableObject {
             "on_play": notifOnPlay,
             "on_scrobble": notifOnScrobble,
         ]])
-    }
-
-    func saveNowPlaying() {
-        store.merge(["nowplaying": ["mode": nowPlayingMode]])
     }
 
     func saveWebhook() {
@@ -249,6 +253,7 @@ final class SettingsViewModel: ObservableObject {
             "meta_display": miniplayerMeta,
             "animation": miniplayerAnimation,
             "artwork_style": miniplayerArtworkStyle,
+            "animation_fullscreen": animationFullscreen,
         ]])
     }
 
@@ -259,39 +264,45 @@ final class SettingsViewModel: ObservableObject {
             "show_progress": lockscreenShowProgress,
             "animated_artwork": lockscreenAnimatedArtwork,
             "background_blur": Int(lockscreenBackgroundBlur),
+            "background_style": lockscreenBackgroundStyle,
             "padding": lockscreenPadding,
             "screens": lockscreenScreens,
+            "clock_glass_style": lockscreenClockGlassStyle,
         ]])
+    }
+
+    func saveLanguage() {
+        store.merge(["language": language])
     }
 }
 
 // MARK: - Settings tab enum
 
 private enum SettingsTab: String, CaseIterable, Identifiable {
-    case lastfm, scrobble, nowPlaying, notifications, webhooks, menubar, miniplayer, lockscreen, editRules, history
+    case general, lastfm, scrobble, notifications, webhooks, menubar, miniplayer, lockscreen, editRules, history
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
+        case .general: return L10n.tr("ทั่วไป", "General")
         case .lastfm: return "Last.fm"
         case .scrobble: return "Scrobble"
-        case .nowPlaying: return "Now Playing"
-        case .notifications: return "แจ้งเตือน"
+        case .notifications: return L10n.tabNotifications
         case .webhooks: return "Webhooks"
         case .menubar: return "Menu Bar"
         case .miniplayer: return "Mini Player"
         case .lockscreen: return "Lock Screen"
         case .editRules: return "Edit Rules"
-        case .history: return "ประวัติ"
+        case .history: return L10n.tabHistory
         }
     }
 
     var icon: String {
         switch self {
+        case .general: return "gearshape"
         case .lastfm: return "music.note.list"
         case .scrobble: return "checkmark.seal"
-        case .nowPlaying: return "lock.iphone"
         case .notifications: return "bell"
         case .webhooks: return "link"
         case .menubar: return "menubar.rectangle"
@@ -307,7 +318,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
     @StateObject var vm = SettingsViewModel()
-    @State private var selection: SettingsTab = .lastfm
+    @State private var selection: SettingsTab = .general
 
     var body: some View {
         NavigationSplitView {
@@ -318,9 +329,9 @@ struct SettingsView: View {
         } detail: {
             Group {
                 switch selection {
+                case .general:       GeneralTab(vm: vm)
                 case .lastfm:        LastfmTab(vm: vm)
                 case .scrobble:      ScrobbleTab(vm: vm)
-                case .nowPlaying:    NowPlayingTab(vm: vm)
                 case .notifications: NotificationsTab(vm: vm)
                 case .webhooks:      WebhooksTab(vm: vm)
                 case .menubar:       MenubarTab(vm: vm)
@@ -336,6 +347,29 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - General
+
+private struct GeneralTab: View {
+    @ObservedObject var vm: SettingsViewModel
+
+    var body: some View {
+        Form {
+            Section {
+                Picker(L10n.languageTitle, selection: $vm.language) {
+                    Text(L10n.languageThai).tag("th")
+                    Text(L10n.languageEnglish).tag("en")
+                }
+                .onChange(of: vm.language) { _, _ in vm.saveLanguage() }
+            } header: {
+                SectionHeader(icon: "gearshape",
+                              title: L10n.tr("ทั่วไป", "General"),
+                              subtitle: L10n.tr("ตั้งค่าทั่วไปของแอพ", "General app settings"))
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
 // MARK: - Last.fm
 
 private struct LastfmTab: View {
@@ -347,17 +381,17 @@ private struct LastfmTab: View {
                 if vm.hasSession {
                     HStack(spacing: 10) {
                         Circle().fill(.green).frame(width: 8, height: 8)
-                        Text("เชื่อมต่อแล้วเป็น")
+                        Text(L10n.lastfmConnected)
                         Text(vm.sessionUser).bold()
                         Spacer()
                     }
-                    Toggle("เปิดใช้งาน Scrobbling", isOn: $vm.lastfmEnabled)
+                    Toggle(L10n.lastfmEnableScrobbling, isOn: $vm.lastfmEnabled)
                         .onChange(of: vm.lastfmEnabled) { _, _ in vm.saveKeys() }
-                    Button("ตัดการเชื่อมต่อ", role: .destructive) { vm.disconnect() }
+                    Button(L10n.lastfmDisconnect, role: .destructive) { vm.disconnect() }
                 } else {
                     HStack(spacing: 10) {
                         Circle().fill(.secondary).frame(width: 8, height: 8)
-                        Text("ยังไม่ได้เชื่อมต่อ").foregroundStyle(.secondary)
+                        Text(L10n.lastfmNotConnected).foregroundStyle(.secondary)
                         Spacer()
                     }
                     LabeledContent("API Key") {
@@ -373,8 +407,8 @@ private struct LastfmTab: View {
                     HStack {
                         Spacer()
                         if vm.connecting {
-                            Button("ยกเลิก") { vm.cancelConnect() }
-                            Button("กำลังรอการอนุมัติ…") {}.disabled(true)
+                            Button(L10n.lastfmCancel) { vm.cancelConnect() }
+                            Button(L10n.lastfmWaiting) {}.disabled(true)
                         } else {
                             Button("Connect with Last.fm") {
                                 vm.saveKeys()
@@ -384,7 +418,7 @@ private struct LastfmTab: View {
                             .disabled(vm.apiKey.isEmpty || vm.apiSecret.isEmpty)
                         }
                     }
-                    Link("ขอ API key ฟรี →",
+                    Link(L10n.lastfmGetApiKey,
                          destination: URL(string: "https://www.last.fm/api/account/create")!)
                         .font(.caption)
                 }
@@ -393,8 +427,8 @@ private struct LastfmTab: View {
                 }
             } header: {
                 SectionHeader(icon: "music.note.list",
-                              title: "เชื่อมต่อ Last.fm",
-                              subtitle: "ส่ง now-playing และ scrobble เพลงไปที่ Last.fm")
+                              title: L10n.lastfmTitle,
+                              subtitle: L10n.lastfmSubtitle)
             }
         }
         .formStyle(.grouped)
@@ -410,54 +444,24 @@ private struct ScrobbleTab: View {
         Form {
             Section {
                 Stepper(value: $vm.scrobblePercent, in: 25...100, step: 5) {
-                    LabeledContent("เล่นครบ") {
+                    LabeledContent(L10n.scrobblePlayedThrough) {
                         Text("\(vm.scrobblePercent)%").monospacedDigit()
                     }
                 }
                 .onChange(of: vm.scrobblePercent) { _, _ in vm.saveScrobbleRules() }
 
                 Stepper(value: $vm.scrobbleMinSeconds, in: 10...120, step: 5) {
-                    LabeledContent("เพลงต้องยาวอย่างน้อย") {
-                        Text("\(vm.scrobbleMinSeconds) วินาที").monospacedDigit()
+                    LabeledContent(L10n.scrobbleMinLength) {
+                        Text("\(vm.scrobbleMinSeconds) \(L10n.scrobbleSeconds)").monospacedDigit()
                     }
                 }
                 .onChange(of: vm.scrobbleMinSeconds) { _, _ in vm.saveScrobbleRules() }
             } header: {
                 SectionHeader(icon: "checkmark.seal",
-                              title: "กฎการ Scrobble",
-                              subtitle: "เกณฑ์ที่ใช้ตัดสินว่าเพลงควรถูก scrobble หรือไม่")
+                              title: L10n.scrobbleTitle,
+                              subtitle: L10n.scrobbleSubtitle)
             } footer: {
-                Text("ค่ามาตรฐานของ Last.fm: 50% หรือ 4 นาที (อย่างใดอย่างหนึ่งถึงก่อน) และเพลงต้องยาวอย่างน้อย 30 วินาที")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-    }
-}
-
-// MARK: - Now Playing
-
-private struct NowPlayingTab: View {
-    @ObservedObject var vm: SettingsViewModel
-
-    var body: some View {
-        Form {
-            Section {
-                Picker("โหมด", selection: $vm.nowPlayingMode) {
-                    Text("Mirror — ปล่อยให้ Music.app ทำเอง").tag("mirror")
-                    Text("Takeover — MusicMate เป็น Now Playing").tag("takeover")
-                }
-                .pickerStyle(.radioGroup)
-                .onChange(of: vm.nowPlayingMode) { _, _ in vm.saveNowPlaying() }
-            } header: {
-                SectionHeader(icon: "lock.iphone",
-                              title: "Lockscreen / Control Center",
-                              subtitle: "เลือกว่าใครจะเป็น Now Playing app บน lockscreen")
-            } footer: {
-                Text(vm.nowPlayingMode == "takeover"
-                     ? "MusicMate จะแสดงบน lockscreen / Control Center พร้อม artwork ของเรา และรับคำสั่ง play/pause/next/prev"
-                     : "Music.app จะเป็นแอปที่แสดงบน lockscreen เอง MusicMate แค่ฟังสถานะอย่างเดียว")
+                Text(L10n.scrobbleFooter)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -474,18 +478,18 @@ private struct NotificationsTab: View {
     var body: some View {
         Form {
             Section {
-                Toggle("เปิดการแจ้งเตือน", isOn: $vm.notificationsEnabled)
+                Toggle(L10n.notifEnable, isOn: $vm.notificationsEnabled)
                     .onChange(of: vm.notificationsEnabled) { _, _ in vm.saveNotifications() }
-                Toggle("เมื่อเริ่มเล่นเพลง", isOn: $vm.notifOnPlay)
+                Toggle(L10n.notifOnPlay, isOn: $vm.notifOnPlay)
                     .disabled(!vm.notificationsEnabled)
                     .onChange(of: vm.notifOnPlay) { _, _ in vm.saveNotifications() }
-                Toggle("เมื่อ Scrobble สำเร็จ", isOn: $vm.notifOnScrobble)
+                Toggle(L10n.notifOnScrobble, isOn: $vm.notifOnScrobble)
                     .disabled(!vm.notificationsEnabled)
                     .onChange(of: vm.notifOnScrobble) { _, _ in vm.saveNotifications() }
             } header: {
                 SectionHeader(icon: "bell",
-                              title: "การแจ้งเตือน",
-                              subtitle: "Banner ของ macOS เมื่อมีกิจกรรมการฟัง")
+                              title: L10n.notifTitle,
+                              subtitle: L10n.notifSubtitle)
             }
         }
         .formStyle(.grouped)
@@ -500,11 +504,11 @@ private struct WebhooksTab: View {
     var body: some View {
         Form {
             Section {
-                Toggle("เปิดใช้งาน Webhooks", isOn: $vm.webhookEnabled)
+                Toggle(L10n.webhookEnable, isOn: $vm.webhookEnabled)
                     .onChange(of: vm.webhookEnabled) { _, _ in vm.saveWebhook() }
                 Stepper(value: $vm.webhookHeartbeat, in: 0...3600, step: 30) {
                     LabeledContent("Heartbeat") {
-                        Text(vm.webhookHeartbeat == 0 ? "ปิด" : "ทุก \(vm.webhookHeartbeat) วินาที")
+                        Text(vm.webhookHeartbeat == 0 ? L10n.webhookOff : L10n.webhookEvery(vm.webhookHeartbeat))
                             .monospacedDigit()
                     }
                 }
@@ -512,17 +516,17 @@ private struct WebhooksTab: View {
                 .onChange(of: vm.webhookHeartbeat) { _, _ in vm.saveWebhook() }
             } header: {
                 SectionHeader(icon: "link",
-                              title: "Webhooks",
-                              subtitle: "POST JSON ไปยัง endpoint ของคุณเมื่อมี event")
+                              title: L10n.webhookTitle,
+                              subtitle: L10n.webhookSubtitle)
             } footer: {
-                Text("Payload format ตรงกับ Music-Scrobbler — eventName: nowplaying / paused / scrobble")
+                Text(L10n.webhookFooter)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 if vm.webhookUrls.isEmpty {
-                    Text("ยังไม่มี URL").foregroundStyle(.secondary).font(.callout)
+                    Text(L10n.webhookNoUrl).foregroundStyle(.secondary).font(.callout)
                 } else {
                     ForEach(vm.webhookUrls, id: \.self) { url in
                         HStack {
@@ -542,11 +546,11 @@ private struct WebhooksTab: View {
                     TextField("https://example.com/webhook", text: $vm.newWebhookUrl)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { vm.addWebhookUrl() }
-                    Button("เพิ่ม") { vm.addWebhookUrl() }
+                    Button(L10n.webhookAdd) { vm.addWebhookUrl() }
                         .disabled(vm.newWebhookUrl.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             } header: {
-                Text("URL ปลายทาง").font(.subheadline.weight(.semibold))
+                Text(L10n.webhookDestination).font(.subheadline.weight(.semibold))
             }
         }
         .formStyle(.grouped)
@@ -561,26 +565,26 @@ private struct MenubarTab: View {
     var body: some View {
         Form {
             Section {
-                Toggle("แสดงไอคอน ♪", isOn: $vm.menubarShowIcon)
+                Toggle(L10n.menubarShowIcon, isOn: $vm.menubarShowIcon)
                     .onChange(of: vm.menubarShowIcon) { _, _ in vm.saveMenubar() }
-                Toggle("แสดงสถานะการเล่น (▶ / ❙❙)", isOn: $vm.menubarShowState)
+                Toggle(L10n.menubarShowState, isOn: $vm.menubarShowState)
                     .onChange(of: vm.menubarShowState) { _, _ in vm.saveMenubar() }
-                Toggle("แสดงชื่อเพลง", isOn: $vm.menubarShowTrack)
+                Toggle(L10n.menubarShowTrack, isOn: $vm.menubarShowTrack)
                     .onChange(of: vm.menubarShowTrack) { _, _ in vm.saveMenubar() }
-                Toggle("แสดงศิลปิน", isOn: $vm.menubarShowArtist)
+                Toggle(L10n.menubarShowArtist, isOn: $vm.menubarShowArtist)
                     .onChange(of: vm.menubarShowArtist) { _, _ in vm.saveMenubar() }
                 Stepper(value: $vm.menubarMaxLength, in: 10...120, step: 5) {
-                    LabeledContent("ความยาวสูงสุด") {
-                        Text("\(vm.menubarMaxLength) ตัวอักษร").monospacedDigit()
+                    LabeledContent(L10n.menubarMaxLength) {
+                        Text("\(vm.menubarMaxLength) \(L10n.menubarChars)").monospacedDigit()
                     }
                 }
                 .onChange(of: vm.menubarMaxLength) { _, _ in vm.saveMenubar() }
             } header: {
                 SectionHeader(icon: "menubar.rectangle",
                               title: "Menu Bar",
-                              subtitle: "ปรับว่า status item จะแสดงข้อมูลอะไรบ้าง")
+                              subtitle: L10n.menubarSubtitle)
             } footer: {
-                Text("ตัวอย่าง: ♪ ▶ ชื่อเพลง — ศิลปิน")
+                Text(L10n.menubarFooter)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -597,29 +601,32 @@ private struct MiniplayerTab: View {
     var body: some View {
         Form {
             Section {
-                Picker("รูปแบบ Artwork", selection: $vm.miniplayerArtworkStyle) {
-                    Text("Classic — artwork ตรงกลาง").tag("classic")
-                    Text("Immersive — full-bleed").tag("fullbleed")
+                Picker(L10n.miniplayerArtworkStyle, selection: $vm.miniplayerArtworkStyle) {
+                    Text(L10n.miniplayerClassic).tag("classic")
+                    Text(L10n.miniplayerImmersive).tag("fullbleed")
                 }
                 .onChange(of: vm.miniplayerArtworkStyle) { _, _ in vm.saveMiniplayer() }
 
-                Picker("ข้อมูลที่แสดง", selection: $vm.miniplayerMeta) {
-                    Text("ศิลปิน").tag("artist")
-                    Text("อัลบั้ม").tag("album")
-                    Text("ศิลปิน — อัลบั้ม").tag("artist_album")
+                Picker(L10n.miniplayerMetaDisplay, selection: $vm.miniplayerMeta) {
+                    Text(L10n.miniplayerArtist).tag("artist")
+                    Text(L10n.miniplayerAlbum).tag("album")
+                    Text(L10n.miniplayerArtistAlbum).tag("artist_album")
                 }
                 .onChange(of: vm.miniplayerMeta) { _, _ in vm.saveMiniplayer() }
 
                 Picker("Animated artwork", selection: $vm.miniplayerAnimation) {
-                    Text("ปิด").tag("off")
-                    Text("เฉพาะปก").tag("art")
-                    Text("เต็ม (รวม backdrop)").tag("full")
+                    Text(L10n.miniplayerAnimOff).tag("off")
+                    Text(L10n.miniplayerAnimArt).tag("art")
+                    Text(L10n.miniplayerAnimFull).tag("full")
                 }
                 .onChange(of: vm.miniplayerAnimation) { _, _ in vm.saveMiniplayer() }
+
+                Toggle(L10n.miniplayerAnimFullscreen, isOn: $vm.animationFullscreen)
+                    .onChange(of: vm.animationFullscreen) { _, _ in vm.saveMiniplayer() }
             } header: {
                 SectionHeader(icon: "play.rectangle",
                               title: "Mini Player",
-                              subtitle: "ปรับหน้าตา mini player ใน menu bar")
+                              subtitle: L10n.miniplayerSubtitle)
             }
         }
         .formStyle(.grouped)
@@ -634,31 +641,31 @@ private struct LockscreenTab: View {
     var body: some View {
         Form {
             Section {
-                Toggle("เปิดใช้งาน Lock Screen Player", isOn: $vm.lockscreenEnabled)
+                Toggle(L10n.lockscreenEnable, isOn: $vm.lockscreenEnabled)
                     .onChange(of: vm.lockscreenEnabled) { _, _ in vm.saveLockscreen() }
 
-                Text("แสดง now-playing เต็มจอเมื่อล็อกหน้าจอ macOS — ใช้เทคนิค shielding window จึงต้องการสิทธิ์เข้าถึงจอภาพระบบ")
+                Text(L10n.lockscreenDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } header: {
                 SectionHeader(icon: "lock.display",
                               title: "Lock Screen",
-                              subtitle: "แสดงเพลงที่กำลังเล่นบนหน้าล็อก")
+                              subtitle: L10n.lockscreenSubtitle)
             }
 
-            Section("การแสดงผล") {
-                Toggle("แสดงชื่ออัลบั้ม", isOn: $vm.lockscreenShowAlbum)
+            Section(L10n.lockscreenDisplay) {
+                Toggle(L10n.lockscreenShowAlbum, isOn: $vm.lockscreenShowAlbum)
                     .onChange(of: vm.lockscreenShowAlbum) { _, _ in vm.saveLockscreen() }
-                Toggle("แสดงแถบความคืบหน้า", isOn: $vm.lockscreenShowProgress)
+                Toggle(L10n.lockscreenShowProgress, isOn: $vm.lockscreenShowProgress)
                     .onChange(of: vm.lockscreenShowProgress) { _, _ in vm.saveLockscreen() }
-                Toggle("ใช้ animated artwork (ถ้ามี)", isOn: $vm.lockscreenAnimatedArtwork)
+                Toggle(L10n.lockscreenAnimArtwork, isOn: $vm.lockscreenAnimatedArtwork)
                     .onChange(of: vm.lockscreenAnimatedArtwork) { _, _ in vm.saveLockscreen() }
             }
 
-            Section("รูปลักษณ์") {
+            Section(L10n.lockscreenAppearance) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("ความเบลอพื้นหลัง")
+                        Text(L10n.lockscreenBgBlur)
                         Spacer()
                         Text("\(Int(vm.lockscreenBackgroundBlur))")
                             .foregroundStyle(.secondary)
@@ -677,43 +684,21 @@ private struct LockscreenTab: View {
                 }
                 .onChange(of: vm.lockscreenPadding) { _, _ in vm.saveLockscreen() }
 
-                Picker("จอที่แสดง", selection: $vm.lockscreenScreens) {
-                    Text("จอหลักเท่านั้น").tag("main")
-                    Text("ทุกจอ").tag("all")
+                Picker(L10n.lockscreenScreenPicker, selection: $vm.lockscreenScreens) {
+                    Text(L10n.lockscreenMainOnly).tag("main")
+                    Text(L10n.lockscreenAllScreens).tag("all")
                 }
                 .onChange(of: vm.lockscreenScreens) { _, _ in vm.saveLockscreen() }
-            }
 
-            Section("ทดสอบ") {
-                if let controller = LockScreenController.shared {
-                    LockscreenTestRow(controller: controller)
-                } else {
-                    Text("Controller ยังไม่พร้อม — รอแอพเริ่มทำงานก่อน")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Picker(L10n.lockscreenClockStyle, selection: $vm.lockscreenClockGlassStyle) {
+                    ForEach(GlassTextVariant.allCases) { v in
+                        Text(v.displayName).tag(v.rawValue)
+                    }
                 }
+                .onChange(of: vm.lockscreenClockGlassStyle) { _, _ in vm.saveLockscreen() }
             }
         }
         .formStyle(.grouped)
-    }
-}
-
-private struct LockscreenTestRow: View {
-    @ObservedObject var controller: LockScreenController
-
-    var body: some View {
-        Button {
-            controller.toggleTestPresentation()
-        } label: {
-            if controller.isShowingTestPresentation {
-                Label("ซ่อน window ทดสอบ", systemImage: "eye.slash")
-            } else {
-                Label("แสดงตอนนี้ (โดยไม่ต้อง lock)", systemImage: "eye")
-            }
-        }
-        Text("ใช้ทดสอบว่าหน้าตา window แสดงผลถูกต้องไหม — สำหรับ debug เท่านั้น")
-            .font(.caption)
-            .foregroundStyle(.secondary)
     }
 }
 
@@ -815,7 +800,7 @@ private struct EditRulesTab: View {
         Form {
             Section {
                 if vm.rules.isEmpty {
-                    Text("ยังไม่มี rule").foregroundStyle(.secondary).font(.callout)
+                    Text(L10n.editRulesNoRule).foregroundStyle(.secondary).font(.callout)
                 } else {
                     ForEach(vm.rules) { rule in
                         HStack(alignment: .top) {
@@ -838,7 +823,7 @@ private struct EditRulesTab: View {
                 HStack(alignment: .top, spacing: 10) {
                     SectionHeader(icon: "pencil.and.list.clipboard",
                                   title: "Edit Rules",
-                                  subtitle: "แก้ metadata อัตโนมัติก่อน scrobble / webhook")
+                                  subtitle: L10n.editRulesSubtitle)
                     Spacer()
                     Menu {
                         Button("Import…") { Task { await vm.importFromFile() } }
@@ -853,37 +838,37 @@ private struct EditRulesTab: View {
             }
 
             Section {
-                LabeledContent("Artist (ต้องระบุ)") {
+                LabeledContent(L10n.editRulesArtistRequired) {
                     TextField("", text: $vm.artistMatch).textFieldStyle(.roundedBorder)
                 }
-                LabeledContent("Track (ถ้ามี)") {
+                LabeledContent(L10n.editRulesTrackOptional) {
                     TextField("", text: $vm.trackMatch).textFieldStyle(.roundedBorder)
                 }
-                LabeledContent("Album (ถ้ามี)") {
+                LabeledContent(L10n.editRulesAlbumOptional) {
                     TextField("", text: $vm.albumMatch).textFieldStyle(.roundedBorder)
                 }
             } header: {
-                Text("ค่าที่ต้องการตรงกัน (match)").font(.subheadline.weight(.semibold))
+                Text(L10n.editRulesMatchHeader).font(.subheadline.weight(.semibold))
             }
 
             Section {
-                LabeledContent("Artist ใหม่") {
+                LabeledContent(L10n.editRulesNewArtist) {
                     TextField("", text: $vm.artistTo).textFieldStyle(.roundedBorder)
                 }
-                LabeledContent("Track ใหม่") {
+                LabeledContent(L10n.editRulesNewTrack) {
                     TextField("", text: $vm.trackTo).textFieldStyle(.roundedBorder)
                 }
-                LabeledContent("Album ใหม่") {
+                LabeledContent(L10n.editRulesNewAlbum) {
                     TextField("", text: $vm.albumTo).textFieldStyle(.roundedBorder)
                 }
                 HStack {
                     Spacer()
-                    Button("เพิ่ม Rule") { Task { await vm.add() } }
+                    Button(L10n.editRulesAdd) { Task { await vm.add() } }
                         .keyboardShortcut(.defaultAction)
                         .disabled(vm.artistMatch.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             } header: {
-                Text("ค่าที่ต้องการแทน (เว้นว่าง = ใช้ของเดิม)").font(.subheadline.weight(.semibold))
+                Text(L10n.editRulesReplaceHeader).font(.subheadline.weight(.semibold))
             }
         }
         .formStyle(.grouped)
@@ -932,8 +917,8 @@ private struct HistoryTab: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.title3).foregroundStyle(.tint).frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("ประวัติการเล่น").font(.headline)
-                    Text("\(vm.totalCount) events ทั้งหมด · \(vm.pendingCount) scrobble ค้าง")
+                    Text(L10n.historyTitle).font(.headline)
+                    Text(L10n.historyStats(total: vm.totalCount, pending: vm.pendingCount))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -947,7 +932,7 @@ private struct HistoryTab: View {
             Divider()
 
             Table(vm.events) {
-                TableColumn("เวลา") { e in
+                TableColumn(L10n.historyTime) { e in
                     Text(e.timestamp, style: .relative).foregroundStyle(.secondary).font(.caption)
                 }
                 .width(min: 80, ideal: 100)
@@ -955,7 +940,7 @@ private struct HistoryTab: View {
                     Text(e.eventType).font(.caption.monospaced())
                 }
                 .width(min: 60, ideal: 70)
-                TableColumn("เพลง") { e in
+                TableColumn(L10n.historyTrack) { e in
                     VStack(alignment: .leading, spacing: 1) {
                         Text(e.trackName).lineLimit(1)
                         Text("\(e.artistName) — \(e.albumName)").font(.caption).foregroundStyle(.secondary).lineLimit(1)

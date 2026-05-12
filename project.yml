@@ -3,7 +3,7 @@ name: MusicMate
 options:
   bundleIdPrefix: com.nopxx
   deploymentTarget:
-    macOS: '14.0'
+    macOS: '26.0'
   developmentLanguage: en
   createIntermediateGroups: true
 settings:
