@@ -71,6 +71,10 @@ enum L10n {
     static var menubarMaxLength: String { tr("ความยาวสูงสุด", "Max length") }
     static var menubarChars: String { tr("ตัวอักษร", "characters") }
     static var menubarFooter: String { tr("ตัวอย่าง: ♪ ▶ ชื่อเพลง — ศิลปิน", "Example: ♪ ▶ Track — Artist") }
+    static var menubarFooterIsland: String { tr("แสดง artwork + ไอคอนเล่น + คลื่นเสียง", "Shows artwork + play icon + audio wave") }
+    static var menubarStyle: String { tr("รูปแบบ", "Style") }
+    static var menubarStyleText: String { tr("ข้อความ", "Text") }
+    static var menubarStyleDynamicIsland: String { tr("Dynamic Island", "Dynamic Island") }
 
     // MARK: - Mini Player
 

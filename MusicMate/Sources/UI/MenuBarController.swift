@@ -11,6 +11,10 @@ final class MenuBarController {
     private let animationFullscreenController: AnimationFullscreenController
     private var cancellables = Set<AnyCancellable>()
 
+    private var dynamicIslandModel: MenuBarDynamicIslandModel?
+    private var hostingView: NSHostingView<MenuBarDynamicIslandView>?
+    private var currentStyle: String = ""
+
     init(playerMonitor: PlayerMonitor, scrobbler: ScrobblerService) {
         self.playerMonitor = playerMonitor
         self.viewModel = MiniPlayerViewModel(monitor: playerMonitor, scrobbler: scrobbler)
@@ -24,6 +28,7 @@ final class MenuBarController {
         if let button = statusItem.button {
             button.target = self
             button.action = #selector(togglePopover(_:))
+            button.sendAction(on: [.leftMouseUp])
         }
 
         playerMonitor.$snapshot
@@ -37,9 +42,13 @@ final class MenuBarController {
 
         SettingsStore.shared.$data
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.updateTitle(self?.currentEditedSnap()) }
+            .sink { [weak self] _ in
+                self?.applyStyle()
+                self?.updateTitle(self?.currentEditedSnap())
+            }
             .store(in: &cancellables)
 
+        applyStyle()
         updateTitle(currentEditedSnap())
     }
 
@@ -47,7 +56,42 @@ final class MenuBarController {
         playerMonitor.snapshot.map { EditHistoryService.shared.apply($0) }
     }
 
+    private func applyStyle() {
+        let style = SettingsStore.shared.string(["menubar", "style"])
+        let resolved = style.isEmpty ? "text" : style
+        if resolved == currentStyle { return }
+        currentStyle = resolved
+
+        guard let button = statusItem.button else { return }
+
+        hostingView?.removeFromSuperview()
+        hostingView = nil
+        dynamicIslandModel = nil
+
+        if resolved == "dynamic_island" {
+            MusicAudioLevelMonitor.shared.start()
+            let model = MenuBarDynamicIslandModel(monitor: playerMonitor)
+            let host = NSHostingView(rootView: MenuBarDynamicIslandView(model: model))
+            host.translatesAutoresizingMaskIntoConstraints = false
+            button.title = ""
+            button.image = nil
+            button.addSubview(host)
+            NSLayoutConstraint.activate([
+                host.leadingAnchor.constraint(equalTo: button.leadingAnchor),
+                host.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+                host.topAnchor.constraint(equalTo: button.topAnchor),
+                host.bottomAnchor.constraint(equalTo: button.bottomAnchor),
+            ])
+            self.dynamicIslandModel = model
+            self.hostingView = host
+            statusItem.length = NSStatusItem.variableLength
+        } else {
+            statusItem.length = NSStatusItem.variableLength
+        }
+    }
+
     private func updateTitle(_ snap: NowPlayingSnapshot?) {
+        guard currentStyle == "text" else { return }
         guard let button = statusItem.button else { return }
         let s = SettingsStore.shared
         let showIcon   = s.bool(["menubar", "show_icon"])
@@ -80,10 +124,32 @@ final class MenuBarController {
 
     @objc private func togglePopover(_ sender: Any?) {
         guard let button = statusItem.button else { return }
+        if currentStyle == "dynamic_island",
+           let event = NSApp.currentEvent,
+           handleIslandClick(event: event, in: button) {
+            return
+        }
         if popover.isShown {
             popover.performClose(sender)
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
+    }
+
+    private func handleIslandClick(event: NSEvent, in button: NSStatusBarButton) -> Bool {
+        guard SettingsStore.shared.bool(["menubar", "show_state"]) else { return false }
+        let loc = button.convert(event.locationInWindow, from: nil)
+        let outerPad: CGFloat = 3
+        let innerPad: CGFloat = 12
+        let artworkW: CGFloat = 18
+        let spacing: CGFloat = 14
+        let iconW: CGFloat = 14
+        let iconStartX = outerPad + innerPad + artworkW + spacing
+        let iconEndX = iconStartX + iconW
+        if loc.x >= iconStartX && loc.x <= iconEndX {
+            MusicAppController.playPause()
+            return true
+        }
+        return false
     }
 }

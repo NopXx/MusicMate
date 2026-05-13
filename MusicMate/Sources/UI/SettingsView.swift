@@ -23,6 +23,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var miniplayerArtworkStyle: String
     @Published var animationFullscreen: Bool
 
+    @Published var menubarStyle: String
     @Published var menubarShowIcon: Bool
     @Published var menubarShowTrack: Bool
     @Published var menubarShowArtist: Bool
@@ -72,6 +73,8 @@ final class SettingsViewModel: ObservableObject {
         self.miniplayerArtworkStyle = style.isEmpty ? "classic" : style
         self.animationFullscreen = store.bool(["miniplayer", "animation_fullscreen"])
 
+        let mbStyle = store.string(["menubar", "style"])
+        self.menubarStyle = mbStyle.isEmpty ? "text" : mbStyle
         self.menubarShowIcon = store.bool(["menubar", "show_icon"])
         self.menubarShowTrack = store.bool(["menubar", "show_track"])
         self.menubarShowArtist = store.bool(["menubar", "show_artist"])
@@ -240,6 +243,7 @@ final class SettingsViewModel: ObservableObject {
 
     func saveMenubar() {
         store.merge(["menubar": [
+            "style": menubarStyle,
             "show_icon": menubarShowIcon,
             "show_track": menubarShowTrack,
             "show_artist": menubarShowArtist,
@@ -565,26 +569,37 @@ private struct MenubarTab: View {
     var body: some View {
         Form {
             Section {
-                Toggle(L10n.menubarShowIcon, isOn: $vm.menubarShowIcon)
-                    .onChange(of: vm.menubarShowIcon) { _, _ in vm.saveMenubar() }
-                Toggle(L10n.menubarShowState, isOn: $vm.menubarShowState)
-                    .onChange(of: vm.menubarShowState) { _, _ in vm.saveMenubar() }
-                Toggle(L10n.menubarShowTrack, isOn: $vm.menubarShowTrack)
-                    .onChange(of: vm.menubarShowTrack) { _, _ in vm.saveMenubar() }
-                Toggle(L10n.menubarShowArtist, isOn: $vm.menubarShowArtist)
-                    .onChange(of: vm.menubarShowArtist) { _, _ in vm.saveMenubar() }
-                Stepper(value: $vm.menubarMaxLength, in: 10...120, step: 5) {
-                    LabeledContent(L10n.menubarMaxLength) {
-                        Text("\(vm.menubarMaxLength) \(L10n.menubarChars)").monospacedDigit()
-                    }
+                Picker(L10n.menubarStyle, selection: $vm.menubarStyle) {
+                    Text(L10n.menubarStyleText).tag("text")
+                    Text(L10n.menubarStyleDynamicIsland).tag("dynamic_island")
                 }
-                .onChange(of: vm.menubarMaxLength) { _, _ in vm.saveMenubar() }
+                .onChange(of: vm.menubarStyle) { _, _ in vm.saveMenubar() }
+
+                if vm.menubarStyle == "text" {
+                    Toggle(L10n.menubarShowIcon, isOn: $vm.menubarShowIcon)
+                        .onChange(of: vm.menubarShowIcon) { _, _ in vm.saveMenubar() }
+                    Toggle(L10n.menubarShowState, isOn: $vm.menubarShowState)
+                        .onChange(of: vm.menubarShowState) { _, _ in vm.saveMenubar() }
+                    Toggle(L10n.menubarShowTrack, isOn: $vm.menubarShowTrack)
+                        .onChange(of: vm.menubarShowTrack) { _, _ in vm.saveMenubar() }
+                    Toggle(L10n.menubarShowArtist, isOn: $vm.menubarShowArtist)
+                        .onChange(of: vm.menubarShowArtist) { _, _ in vm.saveMenubar() }
+                    Stepper(value: $vm.menubarMaxLength, in: 10...120, step: 5) {
+                        LabeledContent(L10n.menubarMaxLength) {
+                            Text("\(vm.menubarMaxLength) \(L10n.menubarChars)").monospacedDigit()
+                        }
+                    }
+                    .onChange(of: vm.menubarMaxLength) { _, _ in vm.saveMenubar() }
+                } else {
+                    Toggle(L10n.menubarShowState, isOn: $vm.menubarShowState)
+                        .onChange(of: vm.menubarShowState) { _, _ in vm.saveMenubar() }
+                }
             } header: {
                 SectionHeader(icon: "menubar.rectangle",
                               title: "Menu Bar",
                               subtitle: L10n.menubarSubtitle)
             } footer: {
-                Text(L10n.menubarFooter)
+                Text(vm.menubarStyle == "dynamic_island" ? L10n.menubarFooterIsland : L10n.menubarFooter)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

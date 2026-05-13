@@ -6,8 +6,12 @@ Written in Swift / SwiftUI. Talks to Music.app via ScriptingBridge. Replaces an 
 
 ## Features
 
-- **Menu bar status item** — configurable display (icon, play state, track, artist, max length)
-- **Mini player popover** — three layouts (Classic / Tall / Immersive), animated artwork, blurred backdrop, dominant-color gradient, scrubber
+- **Menu bar status item** — two styles:
+  - *Text* — configurable display (icon, play state, track, artist, max length)
+  - *Dynamic Island* — pill with album artwork thumbnail, play/pause icon (clickable), and a real-time audio waveform; pill tint follows the current track's accent color
+- **Mini player popover** — three layouts (Classic / Tall / Immersive), animated artwork, blurred backdrop, dominant-color gradient, scrubber, full-width audio waveform
+- **Real-time audio waveform** — Core Audio Process Tap (macOS 14.2+) captures Music.app's output, FFT (Accelerate / vDSP) decomposes it into 10 log-spaced frequency bands rendered as bars in the menu bar, mini player, and lock screen card
+- **Now Playing widget** — small / medium / large WidgetKit widgets sharing app-group data, with transport controls (play/pause/next/previous) via App Intents and live in-process progress bar
 - **Last.fm scrobbling** — `track.updateNowPlaying` on play, `track.scrobble` once per play (configurable threshold), with auth flow and Keychain-style local config
 - **Pending scrobble queue** — failed scrobbles are persisted to SQLite and retried on launch + every 5 minutes
 - **Now Playing takeover** — `MPNowPlayingInfoCenter` with silent-audio looper so MusicMate owns the lock screen / Control Center slot, artwork included
@@ -22,8 +26,8 @@ Written in Swift / SwiftUI. Talks to Music.app via ScriptingBridge. Replaces an 
 
 ## Requirements
 
-- macOS 14 (Sonoma) or later
-- Xcode 15+
+- macOS 26.0 or later — required for Liquid Glass UI (lock screen / mini player), and Core Audio Process Tap (real-time audio waveform)
+- Xcode 26+
 - [`xcodegen`](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 
 ## Build
@@ -53,10 +57,17 @@ PlayerMonitor          ──┐
                          │
                          ├─►  HistoryRecorder ──► HistoryStore (SQLite)
                          │
+                         ├─►  WidgetDataManager  ──►  App Group JSON + WidgetCenter reload
+                         │                            └─►  MusicMateWidget (WidgetKit + App Intents)
+                         │
                          ├─►  MenuBarController + MiniPlayer (SwiftUI)
                          │
                          └─►  LockScreenController
                                 └─► SkyLightOperator (private CGS space pinning)
+
+MusicAudioLevelMonitor  ──►  CATapDescription + AudioHardwareCreateProcessTap (macOS 14.2+)
+                             └─► vDSP FFT → 10 log-spaced bands → @Published
+                                 └─► consumed by menu bar / miniplayer / lockscreen wave views
 
 EditHistoryService  ──►  applies rules before scrobble / webhook / display
 L10n                ──►  runtime i18n (Thai / English) via SettingsStore
@@ -79,7 +90,9 @@ All user data lives under `~/Library/Application Support/MusicMate/`:
 MusicMate/
   Sources/
     App.swift
-    Player/                  PlayerMonitor, MusicAppController, NowPlayingService
+    Player/                  PlayerMonitor, MusicAppController, NowPlayingService,
+                             MusicAudioLevelMonitor (Core Audio Process Tap + FFT),
+                             WidgetDataManager (App Group writer)
       Bridge/                Music.h (sdef-generated), MusicStubs.m
     Scrobbler/               LastFMClient, ScrobblerService, PendingScrobbleQueue
     Artwork/                 ArtworkService, ColorExtractor
@@ -88,12 +101,15 @@ MusicMate/
     Webhooks/                WebhookDispatcher
     Helpers/                 L10n (i18n), TextToShape
     Settings/                SettingsStore, MigrationService
-    UI/                      MenuBarController, MiniPlayer*, SettingsView, SettingsWindowController
-      LockScreen/            LockScreenController, SkyLightOperator, LockScreenWindow, LockScreenPlayerView
+    UI/                      MenuBarController, MenuBarDynamicIslandView,
+                             MiniPlayer*, SettingsView, SettingsWindowController,
+                             AnimatedArtworkView, AnimationFullscreen*
+      LockScreen/            LockScreenController, SkyLightOperator, LockScreenWindow,
+                             LockScreenPlayerView (with real-time wave bars)
   MusicMate-Bridging-Header.h
-  Info.plist
+  Info.plist                 (NSAudioCaptureUsageDescription for Process Tap)
   MusicMate.entitlements
-MusicMateWidget/             (skeleton — not yet implemented)
+MusicMateWidget/             WidgetKit extension — small / medium / large + App Intents
 MusicMateTests/
 project.yml                  (xcodegen)
 ```
@@ -106,7 +122,6 @@ The first time MusicMate sends a command to Music.app, macOS will prompt for **A
 
 Most features described above are implemented and working. Outstanding:
 
-- Widget extension (target exists as a skeleton)
 - Last.fm session-key migration to Keychain
 - Localization for non-Settings views (MiniPlayer, AnimationFullscreen)
 - App icon, code signing, notarization, auto-update

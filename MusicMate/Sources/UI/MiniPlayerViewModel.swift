@@ -57,11 +57,6 @@ final class MiniPlayerViewModel: ObservableObject {
                 let edited = rawSnap.map { EditHistoryService.shared.apply($0) }
                 self.snapshot = edited
                 self.handleTrackUpdate(edited)
-                WidgetDataManager.shared.update(
-                    snapshot: edited,
-                    artwork: edited != nil ? self.artwork : nil,
-                    palette: edited != nil ? self.palette : nil
-                )
             }
             .store(in: &cancellables)
 
@@ -96,6 +91,11 @@ final class MiniPlayerViewModel: ObservableObject {
         // Do not clear artwork and palette here so the UI smoothly holds the
         // previous artwork until the new one is fetched, avoiding rapid
         // SwiftUI transitions that break NSViewRepresentables.
+
+        // Tell the widget immediately that the track changed, with nil artwork.
+        // Otherwise it would render the new title/artist with the previous
+        // track's artwork until the async lookup below completes.
+        WidgetDataManager.shared.update(snapshot: snap, artwork: nil, palette: nil)
 
         let title = snap.title, artist = snap.artist, album = snap.album
         Task { [weak self] in

@@ -14,6 +14,9 @@ final class WebhookDispatcher: ObservableObject {
     private var lastIsPlaying: Bool = false
     private var lastFiredScrobbleKey: String = ""
 
+    private var pausedAt: Date?
+    private let pauseThreshold: TimeInterval = 120
+
     private var heartbeatTimer: Timer?
 
     func attach(monitor: PlayerMonitor, scrobbler: ScrobblerService) {
@@ -46,11 +49,19 @@ final class WebhookDispatcher: ObservableObject {
             .filter { !$0.isEmpty }
     }
 
+    private func isPausedTooLong() -> Bool {
+        guard let pausedAt else { return false }
+        return Date().timeIntervalSince(pausedAt) > pauseThreshold
+    }
+
     private func handleSnapshot(_ snap: NowPlayingSnapshot?) {
         guard enabled() else { return }
         guard let snap, snap.hasTrack else {
             if !lastTrackKey.isEmpty {
-                if lastIsPlaying { fire(event: "paused", rawSnap: phantomSnap(), editedSnap: nil) }
+                if lastIsPlaying && !isPausedTooLong() {
+                    fire(event: "paused", rawSnap: phantomSnap(), editedSnap: nil)
+                }
+                pausedAt = pausedAt ?? Date()
                 lastTrackKey = ""
                 lastIsPlaying = false
             }
@@ -68,6 +79,12 @@ final class WebhookDispatcher: ObservableObject {
         }
         lastTrackKey = key
         lastIsPlaying = snap.isPlaying
+        if snap.isPlaying {
+            pausedAt = nil
+        } else {
+            if pausedAt == nil { pausedAt = Date() }
+            if isPausedTooLong() { return }
+        }
         fire(event: event, rawSnap: snap, editedSnap: edited)
     }
 
@@ -95,6 +112,7 @@ final class WebhookDispatcher: ObservableObject {
     private func heartbeatFire() {
         guard enabled() else { return }
         guard let snap = monitor?.snapshot, snap.hasTrack else { return }
+        guard !isPausedTooLong() else { return }
         let event = snap.isPlaying ? "nowplaying" : "paused"
         let edited = EditHistoryService.shared.apply(snap)
         fire(event: event, rawSnap: snap, editedSnap: edited)

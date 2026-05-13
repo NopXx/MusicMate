@@ -173,7 +173,7 @@ private struct NowPlayingCard: View {
                 }
 
                 if snap.isPlaying {
-                    EqualizerIcon()
+                    LockScreenWaveBars()
                 }
             }
 
@@ -222,6 +222,33 @@ private struct NowPlayingCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .shadow(color: .black.opacity(0.3), radius: 6, x: 0, y: 3)
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct LockScreenWaveBars: View {
+    @ObservedObject private var audio = MusicAudioLevelMonitor.shared
+    private let count = 10
+    private let bandStride = 1
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 2) {
+            ForEach(0..<count, id: \.self) { i in
+                Capsule()
+                    .fill(Color.white.opacity(0.75))
+                    .frame(width: 2.5, height: barHeight(i))
+                    .animation(.easeOut(duration: 0.06), value: barHeight(i))
+            }
+        }
+        .frame(height: 22)
+        .onAppear { MusicAudioLevelMonitor.shared.start() }
+    }
+
+    private func barHeight(_ i: Int) -> CGFloat {
+        let bands = audio.bands
+        let base: CGFloat = 4
+        guard i < bands.count else { return base }
+        let v = CGFloat(min(1, max(0, bands[i])))
+        return base + v * 18
     }
 }
 

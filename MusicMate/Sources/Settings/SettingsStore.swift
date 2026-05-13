@@ -43,6 +43,7 @@ final class SettingsStore: ObservableObject {
                 "heartbeat_seconds": 0,
             ],
             "menubar": [
+                "style": "text",
                 "show_icon": true,
                 "show_track": true,
                 "show_artist": false,
