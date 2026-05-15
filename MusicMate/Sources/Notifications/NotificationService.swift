@@ -23,6 +23,14 @@ final class NotificationService: NSObject, ObservableObject {
         UNUserNotificationCenter.current().delegate = self
         requestAuthorizationIfNeeded()
 
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshAuthorizationStatus()
+        }
+
         monitor.$snapshot
             .receive(on: DispatchQueue.main)
             .sink { [weak self] snap in self?.handleSnapshot(snap) }
@@ -53,13 +61,46 @@ final class NotificationService: NSObject, ObservableObject {
         }
     }
 
+    /// Returns the current authorization state. If status is `.notDetermined`, prompts the
+    /// user; if `.denied`, returns false so the caller can surface a message.
+    func ensureAuthorized() async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            self.authorized = true
+            return true
+        case .notDetermined:
+            let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+            self.authorized = granted
+            return granted
+        default:
+            self.authorized = false
+            return false
+        }
+    }
+
     private func enabled() -> Bool {
         authorized && settings.bool(["notifications", "enabled"])
+    }
+
+    private func refreshAuthorizationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { [weak self] s in
+            let ok: Bool
+            switch s.authorizationStatus {
+            case .authorized, .provisional, .ephemeral: ok = true
+            default: ok = false
+            }
+            Task { @MainActor in self?.authorized = ok }
+        }
     }
 
     private func handleSnapshot(_ snap: NowPlayingSnapshot?) {
         guard enabled(), settings.bool(["notifications", "on_play"]) else { return }
         guard let snap, snap.hasTrack, snap.isPlaying else { return }
+        // Skip transitional snapshots from Music.app where fields update
+        // out-of-sync during a track switch.
+        guard !snap.artist.isEmpty else { return }
         let edited = EditHistoryService.shared.apply(snap)
         let key = trackKey(edited)
         guard key != lastNotifiedTrackKey else { return }
@@ -106,25 +147,34 @@ final class NotificationService: NSObject, ObservableObject {
     private func artworkAttachment(title: String, artist: String, album: String) async -> UNNotificationAttachment? {
         let result = await ArtworkService.shared.lookup(title: title, artist: artist, album: album)
         guard let urlString = result.artworkURL ?? result.artworkUltraURL,
-              let url = URL(string: urlString) else { return nil }
+              let url = URL(string: urlString) else {
+            NSLog("[Notifications] no artwork URL for \(title) - \(artist)")
+            return nil
+        }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
+            guard let image = NSImage(data: data),
+                  let tiff = image.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff),
+                  let pngData = rep.representation(using: .png, properties: [:]) else {
+                NSLog("[Notifications] cannot decode artwork (\(data.count) bytes) from \(urlString)")
+                return nil
+            }
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("MusicMateNotificationArtwork", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let fileURL = dir.appendingPathComponent("\(UUID().uuidString).jpg")
-            try data.write(to: fileURL, options: .atomic)
+            let fileURL = dir.appendingPathComponent("\(UUID().uuidString).png")
+            try pngData.write(to: fileURL, options: .atomic)
             return try UNNotificationAttachment(identifier: "artwork", url: fileURL,
-                                                options: [UNNotificationAttachmentOptionsTypeHintKey: "public.jpeg"])
+                                                options: [UNNotificationAttachmentOptionsTypeHintKey: "public.png"])
         } catch {
-            NSLog("[Notifications] artwork download error: \(error.localizedDescription)")
+            NSLog("[Notifications] artwork attachment error: \(error.localizedDescription)")
             return nil
         }
     }
 
     private func trackKey(_ snap: NowPlayingSnapshot) -> String {
-        if !snap.persistentID.isEmpty { return snap.persistentID }
-        return "\(snap.title)|\(snap.artist)|\(snap.album)".lowercased()
+        "\(snap.persistentID)|\(snap.title)|\(snap.artist)|\(snap.album)".lowercased()
     }
 }
 

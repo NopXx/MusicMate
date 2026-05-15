@@ -120,8 +120,8 @@ final class SettingsViewModel: ObservableObject {
     func connect() {
         saveKeys()
         let lf = store.value(["lastfm"], [String: Any].self) ?? [:]
-        let key = (lf["api_key"] as? String) ?? ""
-        let secret = (lf["api_secret"] as? String) ?? ""
+        let key = LastFMSecrets.resolveKey(lf["api_key"] as? String)
+        let secret = LastFMSecrets.resolveSecret(lf["api_secret"] as? String)
         guard !key.isEmpty, !secret.isEmpty else {
             statusMessage = L10n.lastfmNeedKeys
             return
@@ -172,8 +172,8 @@ final class SettingsViewModel: ObservableObject {
                 guard let self else { return }
                 let lf = await SettingsStore.shared.value(["lastfm"], [String: Any].self) ?? [:]
                 let token = (lf["pending_token"] as? String) ?? ""
-                let key = (lf["api_key"] as? String) ?? ""
-                let secret = (lf["api_secret"] as? String) ?? ""
+                let key = LastFMSecrets.resolveKey(lf["api_key"] as? String)
+                let secret = LastFMSecrets.resolveSecret(lf["api_secret"] as? String)
                 guard !token.isEmpty else { continue }
                 let res = await LastFMClient.call(method: "auth.getSession",
                                                   params: ["api_key": key, "token": token],
@@ -216,6 +216,21 @@ final class SettingsViewModel: ObservableObject {
             "on_play": notifOnPlay,
             "on_scrobble": notifOnScrobble,
         ]])
+    }
+
+    func toggleNotifications(to newValue: Bool) {
+        if newValue {
+            Task { @MainActor in
+                let granted = await NotificationService.shared.ensureAuthorized()
+                if !granted {
+                    notificationsEnabled = false
+                    statusMessage = L10n.notifPermissionDenied
+                }
+                saveNotifications()
+            }
+        } else {
+            saveNotifications()
+        }
     }
 
     func saveWebhook() {
@@ -316,6 +331,21 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .history: return "clock.arrow.circlepath"
         }
     }
+
+    var tint: Color {
+        switch self {
+        case .general:       return Color(red: 0.45, green: 0.48, blue: 0.55)
+        case .lastfm:        return Color(red: 0.85, green: 0.18, blue: 0.18)
+        case .scrobble:      return .orange
+        case .notifications: return .red
+        case .webhooks:      return .purple
+        case .menubar:       return .blue
+        case .miniplayer:    return .pink
+        case .lockscreen:    return .indigo
+        case .editRules:     return .teal
+        case .history:       return Color(red: 0.55, green: 0.40, blue: 0.30)
+        }
+    }
 }
 
 // MARK: - Root view
@@ -327,8 +357,15 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsTab.allCases, selection: $selection) { tab in
-                Label(tab.label, systemImage: tab.icon).tag(tab)
+                HStack(spacing: 10) {
+                    SidebarTile(icon: tab.icon, tint: tab.tint)
+                    Text(tab.label)
+                        .font(.callout)
+                }
+                .padding(.vertical, 2)
+                .tag(tab)
             }
+            .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
         } detail: {
             Group {
@@ -346,6 +383,7 @@ struct SettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(SettingsTokens.pageBackground)
         }
         .frame(minWidth: 720, idealWidth: 760, minHeight: 520, idealHeight: 560)
     }
@@ -356,21 +394,46 @@ struct SettingsView: View {
 private struct GeneralTab: View {
     @ObservedObject var vm: SettingsViewModel
 
+    private var appVersion: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        return "\(v) (\(b))"
+    }
+
     var body: some View {
-        Form {
-            Section {
-                Picker(L10n.languageTitle, selection: $vm.language) {
-                    Text(L10n.languageThai).tag("th")
-                    Text(L10n.languageEnglish).tag("en")
+        SettingsPage {
+            SettingsCard(
+                icon: "gearshape",
+                iconTint: SettingsTab.general.tint,
+                title: LocalizedStringKey(L10n.tr("ทั่วไป", "General")),
+                subtitle: LocalizedStringKey(L10n.tr("ตั้งค่าทั่วไปของแอพ", "General app settings"))
+            ) {
+                CardRow(label: LocalizedStringKey(L10n.languageTitle)) {
+                    Picker("", selection: $vm.language) {
+                        Text(L10n.languageThai).tag("th")
+                        Text(L10n.languageEnglish).tag("en")
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
+                    .onChange(of: vm.language) { _, _ in vm.saveLanguage() }
                 }
-                .onChange(of: vm.language) { _, _ in vm.saveLanguage() }
-            } header: {
-                SectionHeader(icon: "gearshape",
-                              title: L10n.tr("ทั่วไป", "General"),
-                              subtitle: L10n.tr("ตั้งค่าทั่วไปของแอพ", "General app settings"))
+            }
+
+            SettingsCard(
+                icon: "info.circle",
+                iconTint: .gray,
+                title: LocalizedStringKey(L10n.tr("เกี่ยวกับ", "About"))
+            ) {
+                CardRow(label: LocalizedStringKey(L10n.tr("เวอร์ชัน", "Version"))) {
+                    Text(appVersion)
+                        .font(.callout)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -379,35 +442,76 @@ private struct GeneralTab: View {
 private struct LastfmTab: View {
     @ObservedObject var vm: SettingsViewModel
 
+    private var needsManualKeys: Bool {
+        LastFMSecrets.bundledAPIKey.isEmpty || LastFMSecrets.bundledAPISecret.isEmpty
+    }
+
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsCard(
+                icon: "music.note.list",
+                iconTint: SettingsTab.lastfm.tint,
+                title: LocalizedStringKey(L10n.lastfmTitle),
+                subtitle: LocalizedStringKey(L10n.lastfmSubtitle)
+            ) {
                 if vm.hasSession {
                     HStack(spacing: 10) {
-                        Circle().fill(.green).frame(width: 8, height: 8)
-                        Text(L10n.lastfmConnected)
-                        Text(vm.sessionUser).bold()
+                        StatusBadge(text: L10n.lastfmConnected, tone: .success)
+                        Text(vm.sessionUser).font(.callout.weight(.semibold))
                         Spacer()
                     }
-                    Toggle(L10n.lastfmEnableScrobbling, isOn: $vm.lastfmEnabled)
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.lastfmEnableScrobbling),
+                                      isOn: $vm.lastfmEnabled)
                         .onChange(of: vm.lastfmEnabled) { _, _ in vm.saveKeys() }
-                    Button(L10n.lastfmDisconnect, role: .destructive) { vm.disconnect() }
+                    HStack {
+                        Spacer()
+                        Button(L10n.lastfmDisconnect, role: .destructive) { vm.disconnect() }
+                    }
                 } else {
                     HStack(spacing: 10) {
-                        Circle().fill(.secondary).frame(width: 8, height: 8)
-                        Text(L10n.lastfmNotConnected).foregroundStyle(.secondary)
+                        StatusBadge(text: L10n.lastfmNotConnected, tone: .neutral)
                         Spacer()
                     }
-                    LabeledContent("API Key") {
+                }
+                if !vm.statusMessage.isEmpty {
+                    Text(vm.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !vm.hasSession && needsManualKeys {
+                SettingsCard(
+                    icon: "key.fill",
+                    iconTint: .orange,
+                    title: "API Credentials",
+                    subtitle: LocalizedStringKey(L10n.lastfmGetApiKey)
+                ) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("API Key").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         TextField("", text: $vm.apiKey)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { vm.saveKeys() }
                     }
-                    LabeledContent("Shared Secret") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Shared Secret").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         SecureField("", text: $vm.apiSecret)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { vm.saveKeys() }
                     }
+                    Link(L10n.lastfmGetApiKey,
+                         destination: URL(string: "https://www.last.fm/api/account/create")!)
+                        .font(.caption)
+                }
+            }
+
+            if !vm.hasSession {
+                SettingsCard(
+                    icon: "link",
+                    iconTint: .blue,
+                    title: "Connect",
+                    subtitle: nil
+                ) {
                     HStack {
                         Spacer()
                         if vm.connecting {
@@ -418,24 +522,15 @@ private struct LastfmTab: View {
                                 vm.saveKeys()
                                 vm.connect()
                             }
+                            .buttonStyle(PrimaryGradientButtonStyle(tint: SettingsTab.lastfm.tint))
                             .keyboardShortcut(.defaultAction)
-                            .disabled(vm.apiKey.isEmpty || vm.apiSecret.isEmpty)
+                            .disabled(LastFMSecrets.resolveKey(vm.apiKey).isEmpty
+                                      || LastFMSecrets.resolveSecret(vm.apiSecret).isEmpty)
                         }
                     }
-                    Link(L10n.lastfmGetApiKey,
-                         destination: URL(string: "https://www.last.fm/api/account/create")!)
-                        .font(.caption)
                 }
-                if !vm.statusMessage.isEmpty {
-                    Text(vm.statusMessage).font(.caption).foregroundStyle(.secondary)
-                }
-            } header: {
-                SectionHeader(icon: "music.note.list",
-                              title: L10n.lastfmTitle,
-                              subtitle: L10n.lastfmSubtitle)
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -445,32 +540,32 @@ private struct ScrobbleTab: View {
     @ObservedObject var vm: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section {
-                Stepper(value: $vm.scrobblePercent, in: 25...100, step: 5) {
-                    LabeledContent(L10n.scrobblePlayedThrough) {
-                        Text("\(vm.scrobblePercent)%").monospacedDigit()
-                    }
+        SettingsPage {
+            SettingsCard(
+                icon: "checkmark.seal",
+                iconTint: SettingsTab.scrobble.tint,
+                title: LocalizedStringKey(L10n.scrobbleTitle),
+                subtitle: LocalizedStringKey(L10n.scrobbleSubtitle)
+            ) {
+                CardRow(label: LocalizedStringKey(L10n.scrobblePlayedThrough)) {
+                    SettingsNumberField(value: $vm.scrobblePercent,
+                                        range: 25...100,
+                                        suffix: "%",
+                                        onCommit: { vm.saveScrobbleRules() })
                 }
-                .onChange(of: vm.scrobblePercent) { _, _ in vm.saveScrobbleRules() }
 
-                Stepper(value: $vm.scrobbleMinSeconds, in: 10...120, step: 5) {
-                    LabeledContent(L10n.scrobbleMinLength) {
-                        Text("\(vm.scrobbleMinSeconds) \(L10n.scrobbleSeconds)").monospacedDigit()
-                    }
+                Divider().opacity(0.4)
+
+                CardRow(label: LocalizedStringKey(L10n.scrobbleMinLength)) {
+                    SettingsNumberField(value: $vm.scrobbleMinSeconds,
+                                        range: 10...120,
+                                        suffix: L10n.scrobbleSeconds,
+                                        onCommit: { vm.saveScrobbleRules() })
                 }
-                .onChange(of: vm.scrobbleMinSeconds) { _, _ in vm.saveScrobbleRules() }
-            } header: {
-                SectionHeader(icon: "checkmark.seal",
-                              title: L10n.scrobbleTitle,
-                              subtitle: L10n.scrobbleSubtitle)
-            } footer: {
-                Text(L10n.scrobbleFooter)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+                CardFooter(text: LocalizedStringKey(L10n.scrobbleFooter))
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -480,23 +575,39 @@ private struct NotificationsTab: View {
     @ObservedObject var vm: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section {
-                Toggle(L10n.notifEnable, isOn: $vm.notificationsEnabled)
-                    .onChange(of: vm.notificationsEnabled) { _, _ in vm.saveNotifications() }
-                Toggle(L10n.notifOnPlay, isOn: $vm.notifOnPlay)
-                    .disabled(!vm.notificationsEnabled)
-                    .onChange(of: vm.notifOnPlay) { _, _ in vm.saveNotifications() }
-                Toggle(L10n.notifOnScrobble, isOn: $vm.notifOnScrobble)
-                    .disabled(!vm.notificationsEnabled)
-                    .onChange(of: vm.notifOnScrobble) { _, _ in vm.saveNotifications() }
-            } header: {
-                SectionHeader(icon: "bell",
-                              title: L10n.notifTitle,
-                              subtitle: L10n.notifSubtitle)
+        SettingsPage {
+            SettingsCard(
+                icon: "bell",
+                iconTint: SettingsTab.notifications.tint,
+                title: LocalizedStringKey(L10n.notifTitle),
+                subtitle: LocalizedStringKey(L10n.notifSubtitle)
+            ) {
+                SettingsToggleRow(label: LocalizedStringKey(L10n.notifEnable),
+                                  isOn: $vm.notificationsEnabled)
+                    .onChange(of: vm.notificationsEnabled) { _, new in vm.toggleNotifications(to: new) }
+
+                Divider().opacity(0.4)
+
+                VStack(alignment: .leading, spacing: SettingsTokens.Spacing.md) {
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.notifOnPlay),
+                                      isOn: $vm.notifOnPlay)
+                        .onChange(of: vm.notifOnPlay) { _, _ in vm.saveNotifications() }
+
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.notifOnScrobble),
+                                      isOn: $vm.notifOnScrobble)
+                        .onChange(of: vm.notifOnScrobble) { _, _ in vm.saveNotifications() }
+                }
+                .disabled(!vm.notificationsEnabled)
+                .opacity(vm.notificationsEnabled ? 1.0 : 0.45)
+                .animation(.easeInOut(duration: 0.18), value: vm.notificationsEnabled)
+
+                if !vm.statusMessage.isEmpty {
+                    Text(vm.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -506,58 +617,84 @@ private struct WebhooksTab: View {
     @ObservedObject var vm: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section {
-                Toggle(L10n.webhookEnable, isOn: $vm.webhookEnabled)
+        SettingsPage {
+            SettingsCard(
+                icon: "link",
+                iconTint: SettingsTab.webhooks.tint,
+                title: LocalizedStringKey(L10n.webhookTitle),
+                subtitle: LocalizedStringKey(L10n.webhookSubtitle)
+            ) {
+                SettingsToggleRow(label: LocalizedStringKey(L10n.webhookEnable),
+                                  isOn: $vm.webhookEnabled)
                     .onChange(of: vm.webhookEnabled) { _, _ in vm.saveWebhook() }
-                Stepper(value: $vm.webhookHeartbeat, in: 0...3600, step: 30) {
-                    LabeledContent("Heartbeat") {
-                        Text(vm.webhookHeartbeat == 0 ? L10n.webhookOff : L10n.webhookEvery(vm.webhookHeartbeat))
-                            .monospacedDigit()
-                    }
+
+                Divider().opacity(0.4)
+
+                CardRow(label: "Heartbeat") {
+                    SettingsNumberField(value: $vm.webhookHeartbeat,
+                                        range: 0...3600,
+                                        width: 70,
+                                        suffix: "s",
+                                        onCommit: { vm.saveWebhook() })
+                        .disabled(!vm.webhookEnabled)
                 }
-                .disabled(!vm.webhookEnabled)
-                .onChange(of: vm.webhookHeartbeat) { _, _ in vm.saveWebhook() }
-            } header: {
-                SectionHeader(icon: "link",
-                              title: L10n.webhookTitle,
-                              subtitle: L10n.webhookSubtitle)
-            } footer: {
-                Text(L10n.webhookFooter)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .opacity(vm.webhookEnabled ? 1.0 : 0.45)
+                .animation(.easeInOut(duration: 0.18), value: vm.webhookEnabled)
+
+                CardFooter(text: LocalizedStringKey(L10n.webhookFooter))
             }
 
-            Section {
+            SettingsCard(
+                icon: "antenna.radiowaves.left.and.right",
+                iconTint: .indigo,
+                title: LocalizedStringKey(L10n.webhookDestination)
+            ) {
                 if vm.webhookUrls.isEmpty {
-                    Text(L10n.webhookNoUrl).foregroundStyle(.secondary).font(.callout)
+                    Text(L10n.webhookNoUrl)
+                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 4)
                 } else {
-                    ForEach(vm.webhookUrls, id: \.self) { url in
-                        HStack {
-                            Text(url).lineLimit(1).truncationMode(.middle)
-                            Spacer()
-                            Button {
-                                vm.removeWebhookUrl(url)
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundStyle(.red)
+                    VStack(spacing: 6) {
+                        ForEach(vm.webhookUrls, id: \.self) { url in
+                            HStack {
+                                Image(systemName: "globe")
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption)
+                                Text(url)
+                                    .font(.callout)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Button {
+                                    vm.removeWebhookUrl(url)
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.primary.opacity(0.04))
+                            )
                         }
                     }
                 }
-                HStack {
+
+                HStack(spacing: 8) {
                     TextField("https://example.com/webhook", text: $vm.newWebhookUrl)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { vm.addWebhookUrl() }
                     Button(L10n.webhookAdd) { vm.addWebhookUrl() }
+                        .buttonStyle(PrimaryGradientButtonStyle(tint: SettingsTab.webhooks.tint))
                         .disabled(vm.newWebhookUrl.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-            } header: {
-                Text(L10n.webhookDestination).font(.subheadline.weight(.semibold))
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -567,44 +704,71 @@ private struct MenubarTab: View {
     @ObservedObject var vm: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section {
-                Picker(L10n.menubarStyle, selection: $vm.menubarStyle) {
-                    Text(L10n.menubarStyleText).tag("text")
-                    Text(L10n.menubarStyleDynamicIsland).tag("dynamic_island")
-                }
-                .onChange(of: vm.menubarStyle) { _, _ in vm.saveMenubar() }
-
-                if vm.menubarStyle == "text" {
-                    Toggle(L10n.menubarShowIcon, isOn: $vm.menubarShowIcon)
-                        .onChange(of: vm.menubarShowIcon) { _, _ in vm.saveMenubar() }
-                    Toggle(L10n.menubarShowState, isOn: $vm.menubarShowState)
-                        .onChange(of: vm.menubarShowState) { _, _ in vm.saveMenubar() }
-                    Toggle(L10n.menubarShowTrack, isOn: $vm.menubarShowTrack)
-                        .onChange(of: vm.menubarShowTrack) { _, _ in vm.saveMenubar() }
-                    Toggle(L10n.menubarShowArtist, isOn: $vm.menubarShowArtist)
-                        .onChange(of: vm.menubarShowArtist) { _, _ in vm.saveMenubar() }
-                    Stepper(value: $vm.menubarMaxLength, in: 10...120, step: 5) {
-                        LabeledContent(L10n.menubarMaxLength) {
-                            Text("\(vm.menubarMaxLength) \(L10n.menubarChars)").monospacedDigit()
-                        }
+        SettingsPage {
+            SettingsCard(
+                icon: "menubar.rectangle",
+                iconTint: SettingsTab.menubar.tint,
+                title: "Menu Bar",
+                subtitle: LocalizedStringKey(L10n.menubarSubtitle)
+            ) {
+                CardRow(label: LocalizedStringKey(L10n.menubarStyle)) {
+                    Picker("", selection: $vm.menubarStyle) {
+                        Text(L10n.menubarStyleText).tag("text")
+                        Text(L10n.menubarStyleDynamicIsland).tag("dynamic_island")
                     }
-                    .onChange(of: vm.menubarMaxLength) { _, _ in vm.saveMenubar() }
-                } else {
-                    Toggle(L10n.menubarShowState, isOn: $vm.menubarShowState)
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 240)
+                    .onChange(of: vm.menubarStyle) { _, _ in vm.saveMenubar() }
+                }
+
+                CardFooter(text: LocalizedStringKey(vm.menubarStyle == "dynamic_island" ? L10n.menubarFooterIsland : L10n.menubarFooter))
+            }
+
+            if vm.menubarStyle == "text" {
+                SettingsCard(
+                    icon: "textformat",
+                    iconTint: .blue,
+                    title: "Text Format"
+                ) {
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.menubarShowIcon),
+                                      isOn: $vm.menubarShowIcon)
+                        .onChange(of: vm.menubarShowIcon) { _, _ in vm.saveMenubar() }
+
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.menubarShowState),
+                                      isOn: $vm.menubarShowState)
+                        .onChange(of: vm.menubarShowState) { _, _ in vm.saveMenubar() }
+
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.menubarShowTrack),
+                                      isOn: $vm.menubarShowTrack)
+                        .onChange(of: vm.menubarShowTrack) { _, _ in vm.saveMenubar() }
+
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.menubarShowArtist),
+                                      isOn: $vm.menubarShowArtist)
+                        .onChange(of: vm.menubarShowArtist) { _, _ in vm.saveMenubar() }
+
+                    Divider().opacity(0.4)
+
+                    CardRow(label: LocalizedStringKey(L10n.menubarMaxLength)) {
+                        SettingsNumberField(value: $vm.menubarMaxLength,
+                                            range: 10...120,
+                                            suffix: L10n.menubarChars,
+                                            onCommit: { vm.saveMenubar() })
+                    }
+                }
+            } else {
+                SettingsCard(
+                    icon: "rectangle.on.rectangle",
+                    iconTint: .blue,
+                    title: "Dynamic Island"
+                ) {
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.menubarShowState),
+                                      isOn: $vm.menubarShowState)
                         .onChange(of: vm.menubarShowState) { _, _ in vm.saveMenubar() }
                 }
-            } header: {
-                SectionHeader(icon: "menubar.rectangle",
-                              title: "Menu Bar",
-                              subtitle: L10n.menubarSubtitle)
-            } footer: {
-                Text(vm.menubarStyle == "dynamic_island" ? L10n.menubarFooterIsland : L10n.menubarFooter)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .animation(.easeInOut(duration: 0.18), value: vm.menubarStyle)
     }
 }
 
@@ -614,37 +778,60 @@ private struct MiniplayerTab: View {
     @ObservedObject var vm: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section {
-                Picker(L10n.miniplayerArtworkStyle, selection: $vm.miniplayerArtworkStyle) {
-                    Text(L10n.miniplayerClassic).tag("classic")
-                    Text(L10n.miniplayerImmersive).tag("fullbleed")
+        SettingsPage {
+            SettingsCard(
+                icon: "play.rectangle",
+                iconTint: SettingsTab.miniplayer.tint,
+                title: "Appearance",
+                subtitle: LocalizedStringKey(L10n.miniplayerSubtitle)
+            ) {
+                CardRow(label: LocalizedStringKey(L10n.miniplayerArtworkStyle)) {
+                    Picker("", selection: $vm.miniplayerArtworkStyle) {
+                        Text(L10n.miniplayerClassic).tag("classic")
+                        Text(L10n.miniplayerImmersive).tag("fullbleed")
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: vm.miniplayerArtworkStyle) { _, _ in vm.saveMiniplayer() }
                 }
-                .onChange(of: vm.miniplayerArtworkStyle) { _, _ in vm.saveMiniplayer() }
 
-                Picker(L10n.miniplayerMetaDisplay, selection: $vm.miniplayerMeta) {
-                    Text(L10n.miniplayerArtist).tag("artist")
-                    Text(L10n.miniplayerAlbum).tag("album")
-                    Text(L10n.miniplayerArtistAlbum).tag("artist_album")
+                Divider().opacity(0.4)
+
+                CardRow(label: LocalizedStringKey(L10n.miniplayerMetaDisplay)) {
+                    Picker("", selection: $vm.miniplayerMeta) {
+                        Text(L10n.miniplayerArtist).tag("artist")
+                        Text(L10n.miniplayerAlbum).tag("album")
+                        Text(L10n.miniplayerArtistAlbum).tag("artist_album")
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: vm.miniplayerMeta) { _, _ in vm.saveMiniplayer() }
                 }
-                .onChange(of: vm.miniplayerMeta) { _, _ in vm.saveMiniplayer() }
+            }
 
-                Picker("Animated artwork", selection: $vm.miniplayerAnimation) {
-                    Text(L10n.miniplayerAnimOff).tag("off")
-                    Text(L10n.miniplayerAnimArt).tag("art")
-                    Text(L10n.miniplayerAnimFull).tag("full")
+            SettingsCard(
+                icon: "sparkles",
+                iconTint: .pink,
+                title: "Animation"
+            ) {
+                CardRow(label: "Animated artwork") {
+                    Picker("", selection: $vm.miniplayerAnimation) {
+                        Text(L10n.miniplayerAnimOff).tag("off")
+                        Text(L10n.miniplayerAnimArt).tag("art")
+                        Text(L10n.miniplayerAnimFull).tag("full")
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: vm.miniplayerAnimation) { _, _ in vm.saveMiniplayer() }
                 }
-                .onChange(of: vm.miniplayerAnimation) { _, _ in vm.saveMiniplayer() }
 
-                Toggle(L10n.miniplayerAnimFullscreen, isOn: $vm.animationFullscreen)
+                Divider().opacity(0.4)
+
+                SettingsToggleRow(label: LocalizedStringKey(L10n.miniplayerAnimFullscreen),
+                                  isOn: $vm.animationFullscreen)
                     .onChange(of: vm.animationFullscreen) { _, _ in vm.saveMiniplayer() }
-            } header: {
-                SectionHeader(icon: "play.rectangle",
-                              title: "Mini Player",
-                              subtitle: L10n.miniplayerSubtitle)
             }
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -654,66 +841,95 @@ private struct LockscreenTab: View {
     @ObservedObject var vm: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section {
-                Toggle(L10n.lockscreenEnable, isOn: $vm.lockscreenEnabled)
+        SettingsPage {
+            SettingsCard(
+                icon: "lock.display",
+                iconTint: SettingsTab.lockscreen.tint,
+                title: "Lock Screen",
+                subtitle: LocalizedStringKey(L10n.lockscreenSubtitle)
+            ) {
+                SettingsToggleRow(label: LocalizedStringKey(L10n.lockscreenEnable),
+                                  isOn: $vm.lockscreenEnabled)
                     .onChange(of: vm.lockscreenEnabled) { _, _ in vm.saveLockscreen() }
 
                 Text(L10n.lockscreenDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } header: {
-                SectionHeader(icon: "lock.display",
-                              title: "Lock Screen",
-                              subtitle: L10n.lockscreenSubtitle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Section(L10n.lockscreenDisplay) {
-                Toggle(L10n.lockscreenShowAlbum, isOn: $vm.lockscreenShowAlbum)
-                    .onChange(of: vm.lockscreenShowAlbum) { _, _ in vm.saveLockscreen() }
-                Toggle(L10n.lockscreenShowProgress, isOn: $vm.lockscreenShowProgress)
-                    .onChange(of: vm.lockscreenShowProgress) { _, _ in vm.saveLockscreen() }
-                Toggle(L10n.lockscreenAnimArtwork, isOn: $vm.lockscreenAnimatedArtwork)
-                    .onChange(of: vm.lockscreenAnimatedArtwork) { _, _ in vm.saveLockscreen() }
+            Group {
+                SettingsCard(
+                    icon: "rectangle.stack",
+                    iconTint: .indigo,
+                    title: LocalizedStringKey(L10n.lockscreenDisplay)
+                ) {
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.lockscreenShowAlbum),
+                                      isOn: $vm.lockscreenShowAlbum)
+                        .onChange(of: vm.lockscreenShowAlbum) { _, _ in vm.saveLockscreen() }
+
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.lockscreenShowProgress),
+                                      isOn: $vm.lockscreenShowProgress)
+                        .onChange(of: vm.lockscreenShowProgress) { _, _ in vm.saveLockscreen() }
+
+                    SettingsToggleRow(label: LocalizedStringKey(L10n.lockscreenAnimArtwork),
+                                      isOn: $vm.lockscreenAnimatedArtwork)
+                        .onChange(of: vm.lockscreenAnimatedArtwork) { _, _ in vm.saveLockscreen() }
+                }
+
+                SettingsCard(
+                    icon: "paintpalette",
+                    iconTint: .purple,
+                    title: LocalizedStringKey(L10n.lockscreenAppearance)
+                ) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(L10n.lockscreenBgBlur).font(.subheadline)
+                            Spacer()
+                            Text("\(Int(vm.lockscreenBackgroundBlur))")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .font(.caption)
+                        }
+                        Slider(value: $vm.lockscreenBackgroundBlur, in: 0...100, step: 5)
+                            .onChange(of: vm.lockscreenBackgroundBlur) { _, _ in vm.saveLockscreen() }
+                    }
+
+                    Divider().opacity(0.4)
+
+                    CardRow(label: "Padding") {
+                        SettingsNumberField(value: $vm.lockscreenPadding,
+                                            range: 0...120,
+                                            suffix: "pt",
+                                            onCommit: { vm.saveLockscreen() })
+                    }
+
+                    CardRow(label: LocalizedStringKey(L10n.lockscreenScreenPicker)) {
+                        Picker("", selection: $vm.lockscreenScreens) {
+                            Text(L10n.lockscreenMainOnly).tag("main")
+                            Text(L10n.lockscreenAllScreens).tag("all")
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        .onChange(of: vm.lockscreenScreens) { _, _ in vm.saveLockscreen() }
+                    }
+
+                    CardRow(label: LocalizedStringKey(L10n.lockscreenClockStyle)) {
+                        Picker("", selection: $vm.lockscreenClockGlassStyle) {
+                            ForEach(GlassTextVariant.allCases) { v in
+                                Text(v.displayName).tag(v.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        .onChange(of: vm.lockscreenClockGlassStyle) { _, _ in vm.saveLockscreen() }
+                    }
+                }
             }
-
-            Section(L10n.lockscreenAppearance) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(L10n.lockscreenBgBlur)
-                        Spacer()
-                        Text("\(Int(vm.lockscreenBackgroundBlur))")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    Slider(value: $vm.lockscreenBackgroundBlur, in: 0...100, step: 5)
-                        .onChange(of: vm.lockscreenBackgroundBlur) { _, _ in vm.saveLockscreen() }
-                }
-
-                Stepper(value: $vm.lockscreenPadding, in: 0...120, step: 8) {
-                    HStack {
-                        Text("Padding")
-                        Spacer()
-                        Text("\(vm.lockscreenPadding) pt").foregroundStyle(.secondary).monospacedDigit()
-                    }
-                }
-                .onChange(of: vm.lockscreenPadding) { _, _ in vm.saveLockscreen() }
-
-                Picker(L10n.lockscreenScreenPicker, selection: $vm.lockscreenScreens) {
-                    Text(L10n.lockscreenMainOnly).tag("main")
-                    Text(L10n.lockscreenAllScreens).tag("all")
-                }
-                .onChange(of: vm.lockscreenScreens) { _, _ in vm.saveLockscreen() }
-
-                Picker(L10n.lockscreenClockStyle, selection: $vm.lockscreenClockGlassStyle) {
-                    ForEach(GlassTextVariant.allCases) { v in
-                        Text(v.displayName).tag(v.rawValue)
-                    }
-                }
-                .onChange(of: vm.lockscreenClockGlassStyle) { _, _ in vm.saveLockscreen() }
-            }
+            .disabled(!vm.lockscreenEnabled)
+            .opacity(vm.lockscreenEnabled ? 1.0 : 0.45)
+            .animation(.easeInOut(duration: 0.18), value: vm.lockscreenEnabled)
         }
-        .formStyle(.grouped)
     }
 }
 
@@ -812,82 +1028,97 @@ private struct EditRulesTab: View {
     @StateObject private var vm = EditRulesViewModel()
 
     var body: some View {
-        Form {
-            Section {
-                if vm.rules.isEmpty {
-                    Text(L10n.editRulesNoRule).foregroundStyle(.secondary).font(.callout)
-                } else {
-                    ForEach(vm.rules) { rule in
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(matchLabel(rule)).font(.callout)
-                                Text("→ " + replacementLabel(rule))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button {
-                                Task { await vm.remove(rule) }
-                            } label: {
-                                Image(systemName: "minus.circle.fill").foregroundStyle(.red)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            } header: {
-                HStack(alignment: .top, spacing: 10) {
-                    SectionHeader(icon: "pencil.and.list.clipboard",
-                                  title: "Edit Rules",
-                                  subtitle: L10n.editRulesSubtitle)
-                    Spacer()
+        SettingsPage {
+            SettingsCard(
+                icon: "pencil.and.list.clipboard",
+                iconTint: SettingsTab.editRules.tint,
+                title: "Edit Rules",
+                subtitle: LocalizedStringKey(L10n.editRulesSubtitle),
+                trailing: AnyView(
                     Menu {
                         Button("Import…") { Task { await vm.importFromFile() } }
                         Button("Export…") { vm.exportToFile() }
                             .disabled(vm.rules.isEmpty)
                     } label: {
                         Image(systemName: "square.and.arrow.up.on.square")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                     }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
+                )
+            ) {
+                if vm.rules.isEmpty {
+                    Text(L10n.editRulesNoRule)
+                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 4)
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(vm.rules) { rule in
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(matchLabel(rule)).font(.callout)
+                                    Text("→ " + replacementLabel(rule))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button {
+                                    Task { await vm.remove(rule) }
+                                } label: {
+                                    Image(systemName: "minus.circle.fill").foregroundStyle(.red)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color.primary.opacity(0.04))
+                            )
+                        }
+                    }
                 }
             }
 
-            Section {
-                LabeledContent(L10n.editRulesArtistRequired) {
-                    TextField("", text: $vm.artistMatch).textFieldStyle(.roundedBorder)
-                }
-                LabeledContent(L10n.editRulesTrackOptional) {
-                    TextField("", text: $vm.trackMatch).textFieldStyle(.roundedBorder)
-                }
-                LabeledContent(L10n.editRulesAlbumOptional) {
-                    TextField("", text: $vm.albumMatch).textFieldStyle(.roundedBorder)
-                }
-            } header: {
-                Text(L10n.editRulesMatchHeader).font(.subheadline.weight(.semibold))
+            SettingsCard(
+                icon: "magnifyingglass",
+                iconTint: .teal,
+                title: LocalizedStringKey(L10n.editRulesMatchHeader)
+            ) {
+                ruleField(label: LocalizedStringKey(L10n.editRulesArtistRequired), text: $vm.artistMatch)
+                ruleField(label: LocalizedStringKey(L10n.editRulesTrackOptional), text: $vm.trackMatch)
+                ruleField(label: LocalizedStringKey(L10n.editRulesAlbumOptional), text: $vm.albumMatch)
             }
 
-            Section {
-                LabeledContent(L10n.editRulesNewArtist) {
-                    TextField("", text: $vm.artistTo).textFieldStyle(.roundedBorder)
-                }
-                LabeledContent(L10n.editRulesNewTrack) {
-                    TextField("", text: $vm.trackTo).textFieldStyle(.roundedBorder)
-                }
-                LabeledContent(L10n.editRulesNewAlbum) {
-                    TextField("", text: $vm.albumTo).textFieldStyle(.roundedBorder)
-                }
+            SettingsCard(
+                icon: "arrow.right.circle",
+                iconTint: .green,
+                title: LocalizedStringKey(L10n.editRulesReplaceHeader)
+            ) {
+                ruleField(label: LocalizedStringKey(L10n.editRulesNewArtist), text: $vm.artistTo)
+                ruleField(label: LocalizedStringKey(L10n.editRulesNewTrack), text: $vm.trackTo)
+                ruleField(label: LocalizedStringKey(L10n.editRulesNewAlbum), text: $vm.albumTo)
+
                 HStack {
                     Spacer()
                     Button(L10n.editRulesAdd) { Task { await vm.add() } }
+                        .buttonStyle(PrimaryGradientButtonStyle(tint: SettingsTab.editRules.tint))
                         .keyboardShortcut(.defaultAction)
                         .disabled(vm.artistMatch.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-            } header: {
-                Text(L10n.editRulesReplaceHeader).font(.subheadline.weight(.semibold))
             }
         }
-        .formStyle(.grouped)
         .task { await vm.load() }
+    }
+
+    @ViewBuilder
+    private func ruleField(label: LocalizedStringKey, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            TextField("", text: text).textFieldStyle(.roundedBorder)
+        }
     }
 
     private func matchLabel(_ r: EditRule) -> String {
@@ -928,10 +1159,11 @@ private struct HistoryTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.title3).foregroundStyle(.tint).frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center, spacing: 12) {
+                TintedIconTile(icon: "clock.arrow.circlepath",
+                               tint: SettingsTab.history.tint,
+                               size: 30, corner: 8)
+                VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.historyTitle).font(.headline)
                     Text(L10n.historyStats(total: vm.totalCount, pending: vm.pendingCount))
                         .font(.caption).foregroundStyle(.secondary)
@@ -939,12 +1171,20 @@ private struct HistoryTab: View {
                 Spacer()
                 Button {
                     Task { await vm.load() }
-                } label: { Image(systemName: "arrow.clockwise") }
-                .buttonStyle(.borderless)
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(7)
+                        .background(
+                            Circle().fill(Color.primary.opacity(0.06))
+                        )
+                }
+                .buttonStyle(.plain)
             }
-            .padding()
+            .padding(SettingsTokens.Spacing.lg)
 
-            Divider()
+            Divider().opacity(0.5)
 
             Table(vm.events) {
                 TableColumn(L10n.historyTime) { e in
@@ -964,29 +1204,8 @@ private struct HistoryTab: View {
             }
             .frame(maxHeight: .infinity)
         }
+        .background(SettingsTokens.pageBackground)
         .task { await vm.load() }
     }
 }
 
-// MARK: - Section header
-
-private struct SectionHeader: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(.tint)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(.vertical, 4)
-    }
-}

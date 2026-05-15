@@ -6,10 +6,10 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>MusicMate</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -29,9 +29,11 @@
 	<key>LastFMAPISecret</key>
 	<string>$(LASTFM_API_SECRET)</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>MusicMate ต้องการสิทธิ์ควบคุม Music เพื่ออ่านสถานะการเล่นและสั่งเล่น/หยุด</string>
+	<string>MusicMate needs permission to control Music to read playback state and send play/pause commands.</string>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>MusicMate อ่านข้อมูลเพลงที่กำลังเล่นจาก Apple Music</string>
+	<string>MusicMate reads the currently playing track info from Apple Music.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>MusicMate captures audio from Music.app to render the waveform visualizer.</string>
 	<key>NSUserNotificationAlertStyle</key>
 	<string>alert</string>
 </dict>

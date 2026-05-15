@@ -156,20 +156,20 @@ private struct NowPlayingCard: View {
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
 
-                VStack(alignment: showInlineArtwork ? .leading : .center, spacing: 2) {
+                VStack(alignment: showInlineArtwork ? .leading : .leading, spacing: 2) {
                     Text(snap.title)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .center)
+                        .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .leading)
 
                     Text(snap.artist)
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .center)
+                        .frame(maxWidth: .infinity, alignment: showInlineArtwork ? .leading : .leading)
                 }
 
                 if snap.isPlaying {
@@ -239,7 +239,7 @@ private struct LockScreenWaveBars: View {
                     .animation(.easeOut(duration: 0.06), value: barHeight(i))
             }
         }
-        .frame(height: 22)
+        .frame(height: 18)
         .onAppear { MusicAudioLevelMonitor.shared.start() }
     }
 

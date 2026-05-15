@@ -50,7 +50,7 @@ struct MiniPlayerView: View {
             VStack(spacing: 0) {
                 Spacer()
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(viewModel.snapshot?.title.nilIfEmpty ?? "ยังไม่ได้เล่นเพลง")
+                    Text(viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack)
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -176,7 +176,7 @@ struct MiniPlayerView: View {
     @ViewBuilder
     private var trackInfoCentered: some View {
         VStack(spacing: 4) {
-            Text(viewModel.snapshot?.title.nilIfEmpty ?? "ยังไม่ได้เล่นเพลง")
+            Text(viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack)
                 .font(.system(size: 17, weight: .bold))
                 .lineLimit(1)
                 .foregroundStyle(.white)
@@ -414,7 +414,7 @@ struct MiniPlayerView: View {
     @ViewBuilder
     private var immersiveContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(viewModel.snapshot?.title.nilIfEmpty ?? "ยังไม่ได้เล่นเพลง")
+            Text(viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack)
                 .font(.system(size: 20, weight: .heavy))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -520,13 +520,13 @@ struct MiniPlayerView: View {
         let dur = snap?.duration ?? 0
         if !hasTrack { return "" }
         if viewModel.hasScrobbled { return "✓ Scrobbled" }
-        if dur > 0 && dur <= 30 { return "เพลงสั้นเกินไป" }
+        if dur > 0 && dur <= 30 { return L10n.miniplayerTrackTooShort }
         return "Scrobble · \(Int(viewModel.scrobblePercent))%"
     }
 
     private func metaLine() -> String {
         guard let snap = viewModel.snapshot, snap.hasTrack else {
-            return "เปิด Apple Music แล้วกด Play"
+            return L10n.miniplayerOpenMusic
         }
         switch viewModel.miniplayerMeta {
         case "artist": return snap.artist
@@ -583,7 +583,7 @@ private struct EditTrackPopover: View {
             HStack {
                 Image(systemName: "pencil.and.list.clipboard")
                     .foregroundStyle(.tint)
-                Text("แก้ข้อมูลเพลง").font(.headline)
+                Text(L10n.miniplayerEditTitle).font(.headline)
                 Spacer()
             }
 
@@ -603,15 +603,15 @@ private struct EditTrackPopover: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            Text("จะใช้ค่าใหม่นี้ทุกครั้งที่ \"\(viewModel.snapshot?.artist ?? "") — \(viewModel.snapshot?.title ?? "")\" เล่นซ้ำ")
+            Text(L10n.miniplayerEditFooter(viewModel.snapshot?.artist ?? "", viewModel.snapshot?.title ?? ""))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack {
                 Spacer()
-                Button("ยกเลิก") { isPresented = false }
-                Button("บันทึก") {
+                Button(L10n.miniplayerCancel) { isPresented = false }
+                Button(L10n.miniplayerSave) {
                     viewModel.saveEditForCurrentTrack(artist: artist, track: track, album: album)
                     isPresented = false
                 }

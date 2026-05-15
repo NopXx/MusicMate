@@ -48,6 +48,7 @@ enum L10n {
     static var notifEnable: String { tr("เปิดการแจ้งเตือน", "Enable notifications") }
     static var notifOnPlay: String { tr("เมื่อเริ่มเล่นเพลง", "When a track starts playing") }
     static var notifOnScrobble: String { tr("เมื่อ Scrobble สำเร็จ", "When scrobble succeeds") }
+    static var notifPermissionDenied: String { tr("macOS ปฏิเสธการแจ้งเตือน — ไปเปิดใน System Settings → Notifications → MusicMate", "macOS denied notifications — enable in System Settings → Notifications → MusicMate") }
 
     // MARK: - Webhooks
 
@@ -90,6 +91,16 @@ enum L10n {
     static var miniplayerAnimArt: String { tr("เฉพาะปก", "Artwork only") }
     static var miniplayerAnimFull: String { tr("เต็ม (รวม backdrop)", "Full (with backdrop)") }
     static var miniplayerAnimFullscreen: String { tr("แสดง Animation เต็มจอ", "Show fullscreen animation") }
+    static var miniplayerNoTrack: String { tr("ยังไม่ได้เล่นเพลง", "No track playing") }
+    static var miniplayerTrackTooShort: String { tr("เพลงสั้นเกินไป", "Track too short") }
+    static var miniplayerOpenMusic: String { tr("เปิด Apple Music แล้วกด Play", "Open Apple Music and press Play") }
+    static var miniplayerEditTitle: String { tr("แก้ข้อมูลเพลง", "Edit Track Info") }
+    static func miniplayerEditFooter(_ artist: String, _ title: String) -> String {
+        tr("จะใช้ค่าใหม่นี้ทุกครั้งที่ \"\(artist) — \(title)\" เล่นซ้ำ",
+           "These values will apply every time \"\(artist) — \(title)\" plays")
+    }
+    static var miniplayerCancel: String { tr("ยกเลิก", "Cancel") }
+    static var miniplayerSave: String { tr("บันทึก", "Save") }
 
     // MARK: - Lock Screen
 

@@ -80,9 +80,10 @@ final class MiniPlayerViewModel: ObservableObject {
             WidgetDataManager.shared.update(snapshot: nil, artwork: nil, palette: nil)
             return
         }
-        let key = snap.persistentID.isEmpty
-            ? "\(snap.title)|\(snap.artist)|\(snap.album)".lowercased()
-            : snap.persistentID
+        // Skip transitional snapshots where Music.app hasn't fully settled
+        // (artist briefly empty during a track switch).
+        guard !snap.artist.isEmpty else { return }
+        let key = "\(snap.persistentID)|\(snap.title)|\(snap.artist)|\(snap.album)".lowercased()
         guard key != lastArtworkKey else {
             WidgetDataManager.shared.update(snapshot: snap, artwork: artwork, palette: palette)
             return
@@ -135,12 +136,22 @@ final class MiniPlayerViewModel: ObservableObject {
 
     func next() {
         MusicAppController.next()
-        monitor?.refresh()
+        scheduleFallbackRefresh()
     }
 
     func previous() {
         MusicAppController.previous()
-        monitor?.refresh()
+        scheduleFallbackRefresh()
+    }
+
+    /// Music.app posts `com.apple.Music.playerInfo` after the track actually
+    /// advances; PlayerMonitor observes that and refreshes itself. We schedule
+    /// a delayed refresh purely as a safety net in case the notification is
+    /// missed, well after Music.app has had time to switch tracks.
+    private func scheduleFallbackRefresh() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            self?.monitor?.refresh()
+        }
     }
 
     /// Save an edit rule for the currently playing track. Match keys use the
@@ -164,7 +175,21 @@ final class MiniPlayerViewModel: ObservableObject {
     }
 
     func toggleNotifications() {
-        notificationsEnabled.toggle()
-        SettingsStore.shared.merge(["notifications": ["enabled": notificationsEnabled]])
+        let target = !notificationsEnabled
+        if target {
+            Task { @MainActor in
+                let granted = await NotificationService.shared.ensureAuthorized()
+                guard granted else {
+                    notificationsEnabled = false
+                    SettingsStore.shared.merge(["notifications": ["enabled": false]])
+                    return
+                }
+                notificationsEnabled = true
+                SettingsStore.shared.merge(["notifications": ["enabled": true]])
+            }
+        } else {
+            notificationsEnabled = false
+            SettingsStore.shared.merge(["notifications": ["enabled": false]])
+        }
     }
 }

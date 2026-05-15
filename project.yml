@@ -33,9 +33,9 @@ targets:
         LSUIElement: true
         CFBundleDisplayName: MusicMate
         CFBundleIconName: AppIcon
-        NSAppleEventsUsageDescription: MusicMate ต้องการสิทธิ์ควบคุม Music เพื่ออ่านสถานะการเล่นและสั่งเล่น/หยุด
-        NSAppleMusicUsageDescription: MusicMate อ่านข้อมูลเพลงที่กำลังเล่นจาก Apple
-          Music
+        NSAppleEventsUsageDescription: MusicMate needs permission to control Music to read playback state and send play/pause commands.
+        NSAppleMusicUsageDescription: MusicMate reads the currently playing track info from Apple Music.
+        NSAudioCaptureUsageDescription: MusicMate captures audio from Music.app to render the waveform visualizer.
         NSUserNotificationAlertStyle: alert
         LastFMAPIKey: $(LASTFM_API_KEY)
         LastFMAPISecret: $(LASTFM_API_SECRET)

@@ -19,7 +19,7 @@ final class SettingsStore: ObservableObject {
 
     static func defaults() -> [String: Any] {
         [
-            "language": "th",
+            "language": "en",
             "lastfm": [
                 "api_key": "",
                 "api_secret": "",
@@ -33,7 +33,7 @@ final class SettingsStore: ObservableObject {
                 "min_seconds": 30,
             ],
             "notifications": [
-                "enabled": true,
+                "enabled": false,
                 "on_play": true,
                 "on_scrobble": false,
             ],
@@ -43,7 +43,7 @@ final class SettingsStore: ObservableObject {
                 "heartbeat_seconds": 0,
             ],
             "menubar": [
-                "style": "text",
+                "style": "dynamic_island",
                 "show_icon": true,
                 "show_track": true,
                 "show_artist": false,

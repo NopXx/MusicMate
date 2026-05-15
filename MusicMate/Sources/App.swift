@@ -23,7 +23,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
-        Task { await MigrationService.runIfNeeded() }
         scrobbler.attach(monitor: playerMonitor)
         nowPlaying.attach(monitor: playerMonitor)
         NotificationService.shared.attach(monitor: playerMonitor, scrobbler: scrobbler)

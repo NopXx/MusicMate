@@ -68,9 +68,10 @@ final class LockScreenViewModel: ObservableObject {
             lastPaletteURL = ""
             return
         }
-        let key = snap.persistentID.isEmpty
-            ? "\(snap.title)|\(snap.artist)|\(snap.album)".lowercased()
-            : snap.persistentID
+        // Skip transitional snapshots from Music.app where ScriptingBridge
+        // returns partial state during a track switch.
+        guard !snap.artist.isEmpty else { return }
+        let key = "\(snap.persistentID)|\(snap.title)|\(snap.artist)|\(snap.album)".lowercased()
         guard key != lastArtworkKey else { return }
         lastArtworkKey = key
 
