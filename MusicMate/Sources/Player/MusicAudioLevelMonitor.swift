@@ -165,13 +165,26 @@ final class MusicAudioLevelMonitor: ObservableObject {
     private var publishTimer: Timer?
     private var started = false
     private let processor = FFTBandProcessor()
+    private let lastIOTick = OSAllocatedUnfairLock<CFAbsoluteTime>(initialState: 0)
+    private var defaultOutputListenerInstalled = false
+
+    private var fullyAttached: Bool {
+        processTapID != kAudioObjectUnknown
+            && aggregateDeviceID != kAudioObjectUnknown
+            && ioProcID != nil
+    }
 
     func start() {
         if started { return }
         started = true
+        installDefaultOutputListener()
         attemptAttach()
         watchTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.attemptAttach() }
+            Task { @MainActor in
+                guard let self else { return }
+                self.checkIOWatchdog()
+                self.attemptAttach()
+            }
         }
         publishTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -194,7 +207,7 @@ final class MusicAudioLevelMonitor: ObservableObject {
 
     private func attemptAttach() {
         let pid = musicPID() ?? -1
-        if pid == currentPID && processTapID != kAudioObjectUnknown { return }
+        if pid == currentPID && fullyAttached { return }
         teardown()
         currentPID = pid
         guard pid > 0 else {
@@ -238,7 +251,11 @@ final class MusicAudioLevelMonitor: ObservableObject {
         tapASBD = asbd
         processor.setSampleRate(Float(asbd.mSampleRate))
 
-        guard let outputUID = defaultOutputDeviceUID() else { return }
+        guard let outputUID = defaultOutputDeviceUID() else {
+            NSLog("[AudioTap] no default output device UID")
+            teardown()
+            return
+        }
         let aggUID = "com.nopxx.musicmate.audiotap.\(UUID().uuidString)"
         let aggDict: [String: Any] = [
             kAudioAggregateDeviceNameKey: "MusicMate Tap",
@@ -261,6 +278,7 @@ final class MusicAudioLevelMonitor: ObservableObject {
         let aggStatus = AudioHardwareCreateAggregateDevice(aggDict as CFDictionary, &aggID)
         guard aggStatus == noErr else {
             NSLog("[AudioTap] CreateAggregateDevice failed: \(aggStatus)")
+            teardown()
             return
         }
         aggregateDeviceID = aggID
@@ -271,7 +289,9 @@ final class MusicAudioLevelMonitor: ObservableObject {
         let channels = Int(asbd.mChannelsPerFrame)
 
         var procID: AudioDeviceIOProcID?
+        let tickLock = lastIOTick
         let procStatus = AudioDeviceCreateIOProcIDWithBlock(&procID, aggID, nil) { _, inInput, _, _, _ in
+            tickLock.withLock { $0 = CFAbsoluteTimeGetCurrent() }
             guard isFloat else { return }
             let abl = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inInput))
             if isNonInterleaved {
@@ -293,10 +313,17 @@ final class MusicAudioLevelMonitor: ObservableObject {
         }
         guard procStatus == noErr, let procID else {
             NSLog("[AudioTap] CreateIOProc failed: \(procStatus)")
+            teardown()
             return
         }
         ioProcID = procID
         let startStatus = AudioDeviceStart(aggID, procID)
+        if startStatus != noErr {
+            NSLog("[AudioTap] AudioDeviceStart failed: \(startStatus)")
+            teardown()
+            return
+        }
+        lastIOTick.withLock { $0 = CFAbsoluteTimeGetCurrent() }
         NSLog("[AudioTap] started tapID=\(tapID) aggID=\(aggID) startStatus=\(startStatus) channels=\(channels) sampleRate=\(asbd.mSampleRate) nonInterleaved=\(isNonInterleaved)")
     }
 
@@ -370,5 +397,43 @@ final class MusicAudioLevelMonitor: ObservableObject {
         }
         guard st == noErr else { return nil }
         return uid as String
+    }
+
+    private func installDefaultOutputListener() {
+        if defaultOutputListenerInstalled { return }
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &addr,
+            DispatchQueue.main
+        ) { [weak self] _, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                NSLog("[AudioTap] default output device changed — reattaching")
+                self.teardown()
+                self.currentPID = -1
+                self.attemptAttach()
+            }
+        }
+        if status == noErr {
+            defaultOutputListenerInstalled = true
+        } else {
+            NSLog("[AudioTap] AddPropertyListener(defaultOutput) failed: \(status)")
+        }
+    }
+
+    private func checkIOWatchdog() {
+        guard fullyAttached else { return }
+        let last = lastIOTick.withLock { $0 }
+        let now = CFAbsoluteTimeGetCurrent()
+        if last > 0 && (now - last) > 3.0 {
+            NSLog("[AudioTap] IOProc silent for \(now - last)s — reattaching")
+            teardown()
+            currentPID = -1
+        }
     }
 }

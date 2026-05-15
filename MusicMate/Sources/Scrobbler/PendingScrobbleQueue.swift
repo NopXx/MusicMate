@@ -28,8 +28,8 @@ final class PendingScrobbleQueue {
         guard !pending.isEmpty else { return }
 
         let lf = settings.value(["lastfm"], [String: Any].self) ?? [:]
-        let key = (lf["api_key"] as? String) ?? ""
-        let secret = (lf["api_secret"] as? String) ?? ""
+        let key = LastFMSecrets.resolveKey(lf["api_key"] as? String)
+        let secret = LastFMSecrets.resolveSecret(lf["api_secret"] as? String)
         let session = (lf["session_key"] as? String) ?? ""
 
         for item in pending {
@@ -59,8 +59,8 @@ final class PendingScrobbleQueue {
     private func credentialsConfigured() -> Bool {
         let lf = settings.value(["lastfm"], [String: Any].self) ?? [:]
         let enabled = (lf["enabled"] as? Bool) ?? false
-        let key = (lf["api_key"] as? String) ?? ""
-        let secret = (lf["api_secret"] as? String) ?? ""
+        let key = LastFMSecrets.resolveKey(lf["api_key"] as? String)
+        let secret = LastFMSecrets.resolveSecret(lf["api_secret"] as? String)
         let session = (lf["session_key"] as? String) ?? ""
         return enabled && !key.isEmpty && !secret.isEmpty && !session.isEmpty
     }

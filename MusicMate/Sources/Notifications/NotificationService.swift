@@ -60,27 +60,29 @@ final class NotificationService: NSObject, ObservableObject {
     private func handleSnapshot(_ snap: NowPlayingSnapshot?) {
         guard enabled(), settings.bool(["notifications", "on_play"]) else { return }
         guard let snap, snap.hasTrack, snap.isPlaying else { return }
-        let key = trackKey(snap)
+        let edited = EditHistoryService.shared.apply(snap)
+        let key = trackKey(edited)
         guard key != lastNotifiedTrackKey else { return }
         lastNotifiedTrackKey = key
         Task { await postNotification(id: "play-\(key)",
-                                      title: snap.title,
-                                      subtitle: snap.artist,
-                                      body: snap.album,
-                                      artworkLookup: (snap.title, snap.artist, snap.album)) }
+                                      title: edited.title,
+                                      subtitle: edited.artist,
+                                      body: edited.album,
+                                      artworkLookup: (edited.title, edited.artist, edited.album)) }
     }
 
     private func handleScrobble() {
         guard enabled(), settings.bool(["notifications", "on_scrobble"]) else { return }
         guard let snap = monitor?.snapshot, snap.hasTrack else { return }
-        let key = trackKey(snap)
+        let edited = EditHistoryService.shared.apply(snap)
+        let key = trackKey(edited)
         guard key != lastNotifiedScrobbleKey else { return }
         lastNotifiedScrobbleKey = key
         Task { await postNotification(id: "scrobble-\(key)",
                                       title: "Scrobbled to Last.fm",
-                                      subtitle: snap.title,
-                                      body: snap.artist,
-                                      artworkLookup: (snap.title, snap.artist, snap.album)) }
+                                      subtitle: edited.title,
+                                      body: edited.artist,
+                                      artworkLookup: (edited.title, edited.artist, edited.album)) }
     }
 
     private func postNotification(id: String, title: String, subtitle: String, body: String,

@@ -30,3 +30,9 @@ Package.resolved
 
 # Scratch / experiments
 scratch_*.swift
+
+# Secrets — copy Secrets.xcconfig.example → Secrets.xcconfig locally
+Secrets.xcconfig
+
+# Claude Code local settings
+.claude/settings.local.json

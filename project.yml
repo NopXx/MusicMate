@@ -6,6 +6,7 @@ options:
     macOS: '26.0'
   developmentLanguage: en
   createIntermediateGroups: true
+  postGenCommand: bash scripts/fix-icon-filetype.sh
 settings:
   base:
     SWIFT_VERSION: '5.9'
@@ -19,17 +20,25 @@ targets:
   MusicMate:
     type: application
     platform: macOS
+    configFiles:
+      Debug: Secrets.xcconfig
+      Release: Secrets.xcconfig
     sources:
     - path: MusicMate/Sources
+    - path: AppIcon.icon
+      type: folder
     info:
       path: MusicMate/Info.plist
       properties:
         LSUIElement: true
         CFBundleDisplayName: MusicMate
+        CFBundleIconName: AppIcon
         NSAppleEventsUsageDescription: MusicMate ต้องการสิทธิ์ควบคุม Music เพื่ออ่านสถานะการเล่นและสั่งเล่น/หยุด
         NSAppleMusicUsageDescription: MusicMate อ่านข้อมูลเพลงที่กำลังเล่นจาก Apple
           Music
         NSUserNotificationAlertStyle: alert
+        LastFMAPIKey: $(LASTFM_API_KEY)
+        LastFMAPISecret: $(LASTFM_API_SECRET)
     entitlements:
       path: MusicMate/MusicMate.entitlements
       properties:
@@ -46,6 +55,7 @@ targets:
         ENABLE_APP_SANDBOX: false
         SWIFT_OBJC_BRIDGING_HEADER: MusicMate/MusicMate-Bridging-Header.h
         CLANG_ENABLE_MODULES: 'YES'
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
     - target: MusicMateWidget
     - sdk: ScriptingBridge.framework

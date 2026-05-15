@@ -6,6 +6,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>MusicMate</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,6 +24,10 @@
 	<string>1</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>LastFMAPIKey</key>
+	<string>$(LASTFM_API_KEY)</string>
+	<key>LastFMAPISecret</key>
+	<string>$(LASTFM_API_SECRET)</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>MusicMate ต้องการสิทธิ์ควบคุม Music เพื่ออ่านสถานะการเล่นและสั่งเล่น/หยุด</string>
 	<key>NSAppleMusicUsageDescription</key>
