@@ -142,7 +142,7 @@ struct MenuBarDynamicIslandView: View {
 private struct WaveBarsView: View {
     let bands: [Float]
     let isPlaying: Bool
-    private let count = 10
+    private let count = 7
 
     var body: some View {
         HStack(alignment: .center, spacing: 1.5) {

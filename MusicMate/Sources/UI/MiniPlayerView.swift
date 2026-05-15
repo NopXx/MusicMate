@@ -50,10 +50,9 @@ struct MiniPlayerView: View {
             VStack(spacing: 0) {
                 Spacer()
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
+                    MarqueeText(text: viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack,
+                                font: .system(size: 17, weight: .bold),
+                                color: .white)
                     Text(metaLine())
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.white.opacity(0.65))
@@ -176,10 +175,9 @@ struct MiniPlayerView: View {
     @ViewBuilder
     private var trackInfoCentered: some View {
         VStack(spacing: 4) {
-            Text(viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack)
-                .font(.system(size: 17, weight: .bold))
-                .lineLimit(1)
-                .foregroundStyle(.white)
+            MarqueeText(text: viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack,
+                        font: .system(size: 17, weight: .bold),
+                        color: .white)
             Text(metaLine())
                 .font(.system(size: 13))
                 .lineLimit(1)
@@ -414,10 +412,9 @@ struct MiniPlayerView: View {
     @ViewBuilder
     private var immersiveContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack)
-                .font(.system(size: 20, weight: .heavy))
-                .foregroundStyle(.white)
-                .lineLimit(1)
+            MarqueeText(text: viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack,
+                        font: .system(size: 20, weight: .heavy),
+                        color: .white)
 
             Text(metaLine())
                 .font(.system(size: 15, weight: .medium))
