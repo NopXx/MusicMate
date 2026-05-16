@@ -1,4 +1,4 @@
-# MusicMate — TODO
+# Musique — TODO
 
 อ้างอิงแผนเต็มที่ `~/.claude/plans/desktop-app-fizzy-whale.md`
 
@@ -8,8 +8,8 @@
 
 ### Foundation
 - [x] Xcode project skeleton (xcodegen) — 3 targets: app, widget, tests
-- [x] App Group: `group.com.nopxx.MusicMate`
-- [x] Min target macOS 14, Bundle ID `com.nopxx.MusicMate`
+- [x] App Group: `group.com.nopxx.musique`
+- [x] Min target macOS 14, Bundle ID `com.nopxx.musique`
 - [x] Entitlements: Apple Events, network client, app-sandbox = false
 
 ### Player integration
@@ -37,7 +37,7 @@
 - [x] `ColorExtractor` (actor) — sample saturated pixels เพื่อ accent + average สำหรับ gradient
 
 ### Settings
-- [x] `SettingsStore` — JSON-backed file ที่ `~/Library/Application Support/MusicMate/settings.json`
+- [x] `SettingsStore` — JSON-backed file ที่ `~/Library/Application Support/Musique/settings.json`
 - [x] Deep merge + defaults + public snapshot (กัน api_secret หลุด)
 - [x] SwiftUI `SettingsView` — General / Last.fm / Scrobble / Notifications / Webhooks / Menu Bar / Mini Player / Lock Screen / Edit Rules / History
 - [x] Live update mini player เมื่อแก้ settings

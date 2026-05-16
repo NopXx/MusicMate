@@ -1,4 +1,4 @@
-# MusicMate
+# Musique
 
 A native macOS menu bar companion for Apple Music — Last.fm scrobbling, listening history, webhooks, edit-rules, notifications, and a polished mini player.
 
@@ -14,7 +14,7 @@ Written in Swift / SwiftUI. Talks to Music.app via ScriptingBridge. Replaces an 
 - **Now Playing widget** — small / medium / large WidgetKit widgets sharing app-group data, with transport controls (play/pause/next/previous) via App Intents and live in-process progress bar
 - **Last.fm scrobbling** — `track.updateNowPlaying` on play, `track.scrobble` once per play (configurable threshold), with auth flow and Keychain-style local config
 - **Pending scrobble queue** — failed scrobbles are persisted to SQLite and retried on launch + every 5 minutes
-- **Now Playing takeover** — `MPNowPlayingInfoCenter` with silent-audio looper so MusicMate owns the lock screen / Control Center slot, artwork included
+- **Now Playing takeover** — `MPNowPlayingInfoCenter` with silent-audio looper so Musique owns the lock screen / Control Center slot, artwork included
 - **Notifications** — banner with artwork on track change and scrobble success
 - **Webhooks** — POST JSON payloads in Music-Scrobbler format with optional heartbeat
 - **Listening history** — every play / pause / resume / scrobble event is recorded to SQLite; viewable in Settings
@@ -34,10 +34,10 @@ Written in Swift / SwiftUI. Talks to Music.app via ScriptingBridge. Replaces an 
 
 ```sh
 xcodegen generate
-xcodebuild -project MusicMate.xcodeproj -scheme MusicMate -configuration Debug build
+xcodebuild -project Musique.xcodeproj -scheme Musique -configuration Debug build
 ```
 
-Or open `MusicMate.xcodeproj` in Xcode and Run.
+Or open `Musique.xcodeproj` in Xcode and Run.
 
 The generated `.xcodeproj` is not committed — regenerate it from `project.yml` whenever you pull.
 
@@ -58,7 +58,7 @@ PlayerMonitor          ──┐
                          ├─►  HistoryRecorder ──► HistoryStore (SQLite)
                          │
                          ├─►  WidgetDataManager  ──►  App Group JSON + WidgetCenter reload
-                         │                            └─►  MusicMateWidget (WidgetKit + App Intents)
+                         │                            └─►  MusiqueWidget (WidgetKit + App Intents)
                          │
                          ├─►  MenuBarController + MiniPlayer (SwiftUI)
                          │
@@ -79,7 +79,7 @@ L10n                ──►  runtime i18n (Thai / English) via SettingsStore
 
 ## Settings
 
-All user data lives under `~/Library/Application Support/MusicMate/`:
+All user data lives under `~/Library/Application Support/Musique/`:
 
 - `settings.json` — JSON-merged with defaults
 - `history.db` — events, edit rules, pending scrobbles
@@ -87,7 +87,7 @@ All user data lives under `~/Library/Application Support/MusicMate/`:
 ## Project layout
 
 ```
-MusicMate/
+Musique/
   Sources/
     App.swift
     Player/                  PlayerMonitor, MusicAppController, NowPlayingService,
@@ -106,17 +106,17 @@ MusicMate/
                              AnimatedArtworkView, AnimationFullscreen*
       LockScreen/            LockScreenController, SkyLightOperator, LockScreenWindow,
                              LockScreenPlayerView (with real-time wave bars)
-  MusicMate-Bridging-Header.h
+  Musique-Bridging-Header.h
   Info.plist                 (NSAudioCaptureUsageDescription for Process Tap)
-  MusicMate.entitlements
-MusicMateWidget/             WidgetKit extension — small / medium / large + App Intents
-MusicMateTests/
+  Musique.entitlements
+MusiqueWidget/             WidgetKit extension — small / medium / large + App Intents
+MusiqueTests/
 project.yml                  (xcodegen)
 ```
 
 ## Permissions
 
-The first time MusicMate sends a command to Music.app, macOS will prompt for **Apple Events** automation permission. If you deny it, control buttons stop working — re-enable it under **System Settings → Privacy & Security → Automation → MusicMate → Music**.
+The first time Musique sends a command to Music.app, macOS will prompt for **Apple Events** automation permission. If you deny it, control buttons stop working — re-enable it under **System Settings → Privacy & Security → Automation → Musique → Music**.
 
 ## Status
 

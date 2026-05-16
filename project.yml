@@ -1,5 +1,5 @@
 ---
-name: MusicMate
+name: Musique
 options:
   bundleIdPrefix: com.nopxx
   deploymentTarget:
@@ -17,94 +17,94 @@ settings:
     ENABLE_HARDENED_RUNTIME: true
     SWIFT_STRICT_CONCURRENCY: minimal
 targets:
-  MusicMate:
+  Musique:
     type: application
     platform: macOS
     configFiles:
       Debug: Secrets.xcconfig
       Release: Secrets.xcconfig
     sources:
-    - path: MusicMate/Sources
+    - path: Musique/Sources
     - path: AppIcon.icon
       type: folder
     info:
-      path: MusicMate/Info.plist
+      path: Musique/Info.plist
       properties:
         LSUIElement: true
-        CFBundleDisplayName: MusicMate
+        CFBundleDisplayName: Musique
         CFBundleIconName: AppIcon
-        NSAppleEventsUsageDescription: MusicMate needs permission to control Music to read playback state and send play/pause commands.
-        NSAppleMusicUsageDescription: MusicMate reads the currently playing track info from Apple Music.
-        NSAudioCaptureUsageDescription: MusicMate captures audio from Music.app to render the waveform visualizer.
+        NSAppleEventsUsageDescription: Musique needs permission to control Music to read playback state and send play/pause commands.
+        NSAppleMusicUsageDescription: Musique reads the currently playing track info from Apple Music.
+        NSAudioCaptureUsageDescription: Musique captures audio from Music.app to render the waveform visualizer.
         NSUserNotificationAlertStyle: alert
         LastFMAPIKey: $(LASTFM_API_KEY)
         LastFMAPISecret: $(LASTFM_API_SECRET)
     entitlements:
-      path: MusicMate/MusicMate.entitlements
+      path: Musique/Musique.entitlements
       properties:
         com.apple.security.app-sandbox: false
         com.apple.security.automation.apple-events: true
         com.apple.security.network.client: true
         com.apple.security.cs.disable-library-validation: true
         com.apple.security.application-groups:
-        - group.com.nopxx.MusicMate
+        - group.com.nopxx.musique
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.MusicMate
+        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.musique
         GENERATE_INFOPLIST_FILE: false
         ENABLE_APP_SANDBOX: false
-        SWIFT_OBJC_BRIDGING_HEADER: MusicMate/MusicMate-Bridging-Header.h
+        SWIFT_OBJC_BRIDGING_HEADER: Musique/Musique-Bridging-Header.h
         CLANG_ENABLE_MODULES: 'YES'
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
-    - target: MusicMateWidget
+    - target: MusiqueWidget
     - sdk: ScriptingBridge.framework
-  MusicMateWidget:
+  MusiqueWidget:
     type: app-extension
     platform: macOS
     sources:
-    - path: MusicMateWidget
+    - path: MusiqueWidget
     info:
-      path: MusicMateWidget/Info.plist
+      path: MusiqueWidget/Info.plist
       properties:
-        CFBundleDisplayName: MusicMate Widget
+        CFBundleDisplayName: Musique Widget
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
-      path: MusicMateWidget/MusicMateWidget.entitlements
+      path: MusiqueWidget/MusiqueWidget.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
-        - group.com.nopxx.MusicMate
+        - group.com.nopxx.musique
         com.apple.security.network.client: true
         com.apple.security.files.downloaded.read-only: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.MusicMate.Widget
+        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.musique.widget
         GENERATE_INFOPLIST_FILE: false
         SKIP_INSTALL: true
-  MusicMateTests:
+  MusiqueTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-    - path: MusicMateTests
+    - path: MusiqueTests
     dependencies:
-    - target: MusicMate
+    - target: Musique
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.MusicMate.Tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.nopxx.musique.tests
         GENERATE_INFOPLIST_FILE: true
 schemes:
-  MusicMate:
+  Musique:
     build:
       targets:
-        MusicMate: all
-        MusicMateWidget: all
+        Musique: all
+        MusiqueWidget: all
     run:
       config: Debug
     test:
       config: Debug
       targets:
-      - MusicMateTests
+      - MusiqueTests
     archive:
       config: Release
