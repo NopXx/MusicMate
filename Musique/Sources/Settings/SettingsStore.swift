@@ -20,6 +20,9 @@ final class SettingsStore: ObservableObject {
     static func defaults() -> [String: Any] {
         [
             "language": "en",
+            "general": [
+                "launch_at_login": false,
+            ],
             "lastfm": [
                 "api_key": "",
                 "api_secret": "",

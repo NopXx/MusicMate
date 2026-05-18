@@ -46,6 +46,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var lockscreenClockGlassStyle: String
 
     @Published var language: String
+    @Published var launchAtLogin: Bool
 
     private let store = SettingsStore.shared
     private var pollTask: Task<Void, Never>?
@@ -104,6 +105,12 @@ final class SettingsViewModel: ObservableObject {
 
         let lang = store.string(["language"])
         self.language = lang.isEmpty ? "th" : lang
+
+        let systemLaunchAtLogin = LaunchAtLoginService.isEnabled
+        self.launchAtLogin = systemLaunchAtLogin
+        if store.bool(["general", "launch_at_login"]) != systemLaunchAtLogin {
+            store.merge(["general": ["launch_at_login": systemLaunchAtLogin]])
+        }
     }
 
     var hasSession: Bool {
@@ -293,6 +300,14 @@ final class SettingsViewModel: ObservableObject {
     func saveLanguage() {
         store.merge(["language": language])
     }
+
+    func saveLaunchAtLogin() {
+        let ok = LaunchAtLoginService.setEnabled(launchAtLogin)
+        if !ok {
+            launchAtLogin = LaunchAtLoginService.isEnabled
+        }
+        store.merge(["general": ["launch_at_login": launchAtLogin]])
+    }
 }
 
 // MARK: - Settings tab enum
@@ -408,6 +423,13 @@ private struct GeneralTab: View {
                 title: LocalizedStringKey(L10n.tr("ทั่วไป", "General")),
                 subtitle: LocalizedStringKey(L10n.tr("ตั้งค่าทั่วไปของแอพ", "General app settings"))
             ) {
+                CardRow(label: LocalizedStringKey(L10n.tr("เปิดอัตโนมัติเมื่อล็อกอิน", "Launch at login"))) {
+                    Toggle("", isOn: $vm.launchAtLogin)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .onChange(of: vm.launchAtLogin) { _, _ in vm.saveLaunchAtLogin() }
+                }
+
                 CardRow(label: LocalizedStringKey(L10n.languageTitle)) {
                     Picker("", selection: $vm.language) {
                         Text(L10n.languageThai).tag("th")
@@ -415,7 +437,7 @@ private struct GeneralTab: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
-                    .frame(width: 200)
+                    .fixedSize()
                     .onChange(of: vm.language) { _, _ in vm.saveLanguage() }
                 }
             }
@@ -718,7 +740,7 @@ private struct MenubarTab: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
-                    .frame(width: 240)
+                    .fixedSize()
                     .onChange(of: vm.menubarStyle) { _, _ in vm.saveMenubar() }
                 }
 
