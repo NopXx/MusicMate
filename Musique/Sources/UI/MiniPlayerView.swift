@@ -53,10 +53,9 @@ struct MiniPlayerView: View {
                     MarqueeText(text: viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack,
                                 font: .system(size: 17, weight: .bold),
                                 color: .white)
-                    Text(metaLine())
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.65))
-                        .lineLimit(1)
+                    MarqueeText(text: metaLine(),
+                                font: .system(size: 13, weight: .medium),
+                                color: .white.opacity(0.65))
                         .padding(.top, 4)
                     VStack(spacing: 5) {
                         progressBar(height: 4)
@@ -178,10 +177,9 @@ struct MiniPlayerView: View {
             MarqueeText(text: viewModel.snapshot?.title.nilIfEmpty ?? L10n.miniplayerNoTrack,
                         font: .system(size: 17, weight: .bold),
                         color: .white)
-            Text(metaLine())
-                .font(.system(size: 13))
-                .lineLimit(1)
-                .foregroundStyle(.white.opacity(0.65))
+            MarqueeText(text: metaLine(),
+                        font: .system(size: 13),
+                        color: .white.opacity(0.65))
         }
     }
 
@@ -416,10 +414,9 @@ struct MiniPlayerView: View {
                         font: .system(size: 20, weight: .heavy),
                         color: .white)
 
-            Text(metaLine())
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.white.opacity(0.55))
-                .lineLimit(1)
+            MarqueeText(text: metaLine(),
+                        font: .system(size: 15, weight: .medium),
+                        color: .white.opacity(0.55))
                 .padding(.top, 3)
 
             VStack(spacing: 6) {
